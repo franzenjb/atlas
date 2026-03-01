@@ -30,7 +30,7 @@ ATLAS.data = (function () {
       if (!res.ok) throw new Error(`FEMA API: ${res.status}`);
 
       const data = await res.json();
-      const records = data.DisasterDeclarations || [];
+      const records = data.DisasterDeclarationsSummaries || data.DisasterDeclarations || [];
 
       // Normalize
       state.disasters = records.map(d => ({

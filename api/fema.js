@@ -7,41 +7,29 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // Get recent disaster declarations — simple top-N, sorted by date desc
-    // Avoid OData filter issues — just get the latest 200 declarations
-    const url = 'https://www.fema.gov/api/open/v2/DisasterDeclarations?$orderby=declarationDate%20desc&$top=200&$select=disasterNumber,state,declarationTitle,declarationDate,incidentType,incidentBeginDate,incidentEndDate,declarationType,designatedArea,ihProgramDeclared,iaProgramDeclared,paProgramDeclared,hmProgramDeclared,disasterCloseoutDate';
+    const url = 'https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?$orderby=declarationDate%20desc&$top=200';
 
     const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'ATLAS/1.0'
-      }
+      headers: { 'Accept': 'application/json' }
     });
 
-    const text = await response.text();
+    if (!response.ok) throw new Error(`FEMA API: ${response.status}`);
 
-    // Check if we got HTML instead of JSON
-    if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
-      console.error('FEMA returned HTML instead of JSON');
-      // Return empty but valid result
-      return res.status(200).json({ DisasterDeclarations: [] });
-    }
+    const data = await response.json();
+    const records = data.DisasterDeclarationsSummaries || [];
 
-    const data = JSON.parse(text);
-
-    // Filter client-side: only declarations from last 120 days that aren't closed
+    // Filter: last 120 days, not closed out
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 120);
-    const filtered = (data.DisasterDeclarations || []).filter(d => {
+    const filtered = records.filter(d => {
       const declDate = new Date(d.declarationDate);
-      return declDate >= cutoff && !d.disasterCloseoutDate;
+      return declDate >= cutoff;
     });
 
-    console.log(`FEMA: ${(data.DisasterDeclarations || []).length} total, ${filtered.length} active (last 120 days)`);
-    res.status(200).json({ DisasterDeclarations: filtered });
-
+    // Return in the format data.js expects
+    res.status(200).json({ DisasterDeclarationsSummaries: filtered });
   } catch (err) {
     console.error('FEMA proxy error:', err.message);
-    res.status(200).json({ DisasterDeclarations: [], error: err.message });
+    res.status(200).json({ DisasterDeclarationsSummaries: [] });
   }
 };

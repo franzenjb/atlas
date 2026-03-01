@@ -40,11 +40,17 @@
 
   // --- Wire Events ---
   function wireEvents() {
-    // Mode tabs
+    // Mode tabs — listen on both parent and individual items for reliability
     var modeTabs = document.getElementById('mode-tabs');
     modeTabs.addEventListener('calciteSegmentedControlChange', function () {
       var selected = modeTabs.querySelector('calcite-segmented-control-item[checked]');
       if (selected) switchMode(selected.value);
+    });
+    // Backup: click listeners on individual items
+    modeTabs.querySelectorAll('calcite-segmented-control-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        setTimeout(function () { switchMode(item.value); }, 50);
+      });
     });
 
     // Submit button

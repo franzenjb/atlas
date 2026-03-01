@@ -7,34 +7,41 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // Get recent disaster declarations (last 120 days)
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 120);
-    const cutoffStr = cutoff.toISOString().split('T')[0];
-
-    const params = new URLSearchParams({
-      '$filter': `declarationDate ge '${cutoffStr}'`,
-      '$orderby': 'declarationDate desc',
-      '$top': '300'
-    });
-
-    const url = `https://www.fema.gov/api/open/v2/DisasterDeclarations?${params.toString()}`;
-    console.log('FEMA fetch:', url);
+    // Get recent disaster declarations — simple top-N, sorted by date desc
+    // Avoid OData filter issues — just get the latest 200 declarations
+    const url = 'https://www.fema.gov/api/open/v2/DisasterDeclarations?$orderby=declarationDate%20desc&$top=200&$select=disasterNumber,state,declarationTitle,declarationDate,incidentType,incidentBeginDate,incidentEndDate,declarationType,designatedArea,ihProgramDeclared,iaProgramDeclared,paProgramDeclared,hmProgramDeclared,disasterCloseoutDate';
 
     const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' }
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'ATLAS/1.0'
+      }
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`FEMA API ${response.status}: ${text.substring(0, 200)}`);
+    const text = await response.text();
+
+    // Check if we got HTML instead of JSON
+    if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+      console.error('FEMA returned HTML instead of JSON');
+      // Return empty but valid result
+      return res.status(200).json({ DisasterDeclarations: [] });
     }
 
-    const data = await response.json();
-    console.log('FEMA returned', (data.DisasterDeclarations || []).length, 'records');
-    res.status(200).json(data);
+    const data = JSON.parse(text);
+
+    // Filter client-side: only declarations from last 120 days that aren't closed
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 120);
+    const filtered = (data.DisasterDeclarations || []).filter(d => {
+      const declDate = new Date(d.declarationDate);
+      return declDate >= cutoff && !d.disasterCloseoutDate;
+    });
+
+    console.log(`FEMA: ${(data.DisasterDeclarations || []).length} total, ${filtered.length} active (last 120 days)`);
+    res.status(200).json({ DisasterDeclarations: filtered });
+
   } catch (err) {
-    console.error('FEMA proxy error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('FEMA proxy error:', err.message);
+    res.status(200).json({ DisasterDeclarations: [], error: err.message });
   }
 };

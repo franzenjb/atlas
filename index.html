@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATLAS — AI Threat-Level Analysis System</title>
+
+  <!-- Calcite 2.13.2 -->
+  <script type="module" src="https://js.arcgis.com/calcite-components/2.13.2/calcite.esm.js"></script>
+  <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.13.2/calcite.css">
+
+  <!-- ArcGIS Maps SDK 4.32 (dark theme) -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.32/esri/themes/dark/main.css">
+  <script src="https://js.arcgis.com/4.32/"></script>
+
+  <!-- Dragon Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Source+Sans+Pro:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<calcite-shell content-behind class="calcite-mode-dark">
+
+  <!-- HEADER -->
+  <calcite-navigation slot="header">
+    <calcite-navigation-logo slot="logo"
+      icon="layer-map-analytics"
+      heading="ATLAS"
+      description="AI Threat-Level Analysis System">
+    </calcite-navigation-logo>
+    <div slot="content-end" class="header-actions">
+      <calcite-chip id="data-status" kind="brand" scale="s" icon="clock">
+        Loading data...
+      </calcite-chip>
+    </div>
+  </calcite-navigation>
+
+  <!-- MAP (main content area) -->
+  <div id="viewDiv"></div>
+  <calcite-scrim id="map-scrim" loading></calcite-scrim>
+
+  <!-- INTELLIGENCE PANEL (right side) -->
+  <calcite-shell-panel slot="panel-end" display-mode="float" width-scale="l" id="intel-panel">
+    <calcite-panel heading="Intelligence">
+
+      <!-- Mode Tabs -->
+      <div slot="header-actions-end">
+        <calcite-segmented-control id="mode-tabs" scale="s" width="auto">
+          <calcite-segmented-control-item value="ask" checked>Ask</calcite-segmented-control-item>
+          <calcite-segmented-control-item value="brief">Brief</calcite-segmented-control-item>
+          <calcite-segmented-control-item value="assess">Assess</calcite-segmented-control-item>
+        </calcite-segmented-control>
+      </div>
+
+      <!-- Intelligence Output Area -->
+      <div id="intel-output">
+        <!-- Welcome state -->
+        <div id="welcome-state" class="intel-section">
+          <div class="red-rule"></div>
+          <h3 class="dragon-headline">Disaster Intelligence</h3>
+          <p class="dragon-body">ATLAS analyzes real-time FEMA disaster declarations, NWS severe weather alerts, and CDC social vulnerability data to produce executive-grade intelligence.</p>
+          <p class="dragon-body muted">Select a scenario below or type a question to begin.</p>
+        </div>
+
+        <!-- AI Response Area (hidden until query) -->
+        <div id="ai-response" class="intel-section" hidden>
+          <!-- Narrative -->
+          <div id="response-narrative"></div>
+
+          <!-- Metric Cards -->
+          <div id="response-metrics" class="stat-grid"></div>
+
+          <!-- Risk Rankings -->
+          <div id="response-rankings"></div>
+
+          <!-- Recommended Actions -->
+          <div id="response-actions"></div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="intel-section" hidden>
+          <calcite-loader label="Analyzing..." type="indeterminate"></calcite-loader>
+          <p class="loading-text">ATLAS is analyzing threat data...</p>
+        </div>
+      </div>
+
+      <!-- Footer: Scenarios + Input -->
+      <div slot="footer" id="intel-footer">
+
+        <!-- Scenario Buttons (Ask mode) -->
+        <div id="ask-scenarios" class="scenario-bar">
+          <calcite-button id="btn-national" appearance="outline-fill" kind="neutral" icon-start="globe" scale="s">
+            National Threat Assessment
+          </calcite-button>
+          <calcite-button id="btn-disasters" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-triangle" scale="s">
+            Active Disasters
+          </calcite-button>
+          <calcite-button id="btn-weather" appearance="outline-fill" kind="neutral" icon-start="partly-cloudy" scale="s">
+            Severe Weather
+          </calcite-button>
+        </div>
+
+        <!-- Scenario Buttons (Assess mode) -->
+        <div id="assess-scenarios" class="scenario-bar" hidden>
+          <calcite-button id="btn-hurricane" appearance="outline-fill" kind="neutral" icon-start="hurricane-warning" scale="s">
+            Hurricane: Gulf Coast
+          </calcite-button>
+          <calcite-button id="btn-tornado" appearance="outline-fill" kind="neutral" icon-start="hurricane-warning" scale="s">
+            Severe Weather: Tornado Alley
+          </calcite-button>
+          <calcite-button id="btn-earthquake" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-triangle" scale="s">
+            Earthquake: West Coast
+          </calcite-button>
+        </div>
+
+        <!-- Text Input -->
+        <div class="input-bar">
+          <calcite-input id="query-input" type="text" placeholder="Ask ATLAS a question..." icon="search" clearable scale="m"></calcite-input>
+          <calcite-button id="btn-submit" kind="brand" icon-start="send" scale="m">Analyze</calcite-button>
+        </div>
+      </div>
+
+    </calcite-panel>
+  </calcite-shell-panel>
+
+</calcite-shell>
+
+<!-- App Scripts -->
+<script src="/js/data.js"></script>
+<script src="/js/map.js"></script>
+<script src="/js/ai.js"></script>
+<script src="/js/app.js"></script>
+
+</body>
+</html>

@@ -10,6 +10,8 @@ ATLAS.data = (function () {
   const state = {
     disasters: [],
     alerts: [],
+    fires: [],
+    earthquakes: [],
     loading: false,
     lastFetch: null,
     errors: []
@@ -118,6 +120,99 @@ ATLAS.data = (function () {
     }
   }
 
+  // --- NIFC Active Wildfires ---
+  async function fetchFires() {
+    try {
+      const url = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query' +
+        '?where=IncidentTypeCategory%3D%27WF%27%20AND%20ActiveFireCandidate%3D1' +
+        '&outFields=IncidentName,POOState,POOCounty,POOCity,IncidentSize,PercentContained,' +
+        'FireDiscoveryDateTime,FireCause,IncidentComplexityLevel,TotalIncidentPersonnel,' +
+        'EstimatedCostToDate,FireBehaviorGeneral,GACC,IrwinID,ModifiedOnDateTime_dt' +
+        '&orderByFields=IncidentSize+DESC' +
+        '&resultRecordCount=200' +
+        '&returnGeometry=true' +
+        '&f=json';
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('NIFC API: ' + res.status);
+
+      const data = await res.json();
+      const features = data.features || [];
+
+      state.fires = features.map(function (f) {
+        var a = f.attributes;
+        var stateCode = (a.POOState || '').replace('US-', '');
+        return {
+          id: a.IrwinID,
+          name: a.IncidentName,
+          state: stateCode,
+          county: a.POOCounty,
+          city: a.POOCity,
+          acres: a.IncidentSize || 0,
+          percentContained: a.PercentContained,
+          discoveredDate: a.FireDiscoveryDateTime ? new Date(a.FireDiscoveryDateTime).toISOString() : null,
+          cause: a.FireCause,
+          complexity: a.IncidentComplexityLevel,
+          personnel: a.TotalIncidentPersonnel,
+          costToDate: a.EstimatedCostToDate,
+          fireBehavior: a.FireBehaviorGeneral,
+          gacc: a.GACC,
+          lastUpdated: a.ModifiedOnDateTime_dt ? new Date(a.ModifiedOnDateTime_dt).toISOString() : null,
+          lat: f.geometry ? f.geometry.y : null,
+          lon: f.geometry ? f.geometry.x : null
+        };
+      });
+
+      console.log('[ATLAS] Loaded ' + state.fires.length + ' active wildfires');
+      return state.fires;
+
+    } catch (err) {
+      console.error('[ATLAS] NIFC fetch error:', err);
+      state.errors.push({ source: 'NIFC', error: err.message });
+      return [];
+    }
+  }
+
+  // --- USGS Earthquakes ---
+  async function fetchEarthquakes() {
+    try {
+      const url = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_month.geojson';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('USGS API: ' + res.status);
+
+      const data = await res.json();
+      const features = data.features || [];
+
+      state.earthquakes = features.map(function (f) {
+        var p = f.properties;
+        var coords = f.geometry.coordinates; // [lon, lat, depth]
+        return {
+          id: f.id,
+          magnitude: p.mag,
+          place: p.place,
+          time: new Date(p.time).toISOString(),
+          url: p.url,
+          tsunami: p.tsunami,
+          alert: p.alert, // PAGER: green/yellow/orange/red
+          felt: p.felt,
+          significance: p.sig,
+          type: p.type,
+          lat: coords[1],
+          lon: coords[0],
+          depth: coords[2]
+        };
+      }).sort(function (a, b) { return b.magnitude - a.magnitude; });
+
+      console.log('[ATLAS] Loaded ' + state.earthquakes.length + ' earthquakes (M4.5+ last 30d)');
+      return state.earthquakes;
+
+    } catch (err) {
+      console.error('[ATLAS] USGS fetch error:', err);
+      state.errors.push({ source: 'USGS', error: err.message });
+      return [];
+    }
+  }
+
   // Extract state abbreviations from area description
   function extractStates(areaDesc) {
     if (!areaDesc) return [];
@@ -133,7 +228,9 @@ ATLAS.data = (function () {
     try {
       await Promise.all([
         fetchDisasters(),
-        fetchAlerts()
+        fetchAlerts(),
+        fetchFires(),
+        fetchEarthquakes()
       ]);
 
       state.lastFetch = new Date();
@@ -166,10 +263,15 @@ ATLAS.data = (function () {
       alertsBySeverity[a.severity] = (alertsBySeverity[a.severity] || 0) + 1;
     });
 
+    const totalFireAcres = state.fires.reduce((s, f) => s + (f.acres || 0), 0);
+
     return {
       totalDisasters: state.disasters.length,
       statesAffected: Object.keys(disastersByState).length,
       totalAlerts: state.alerts.length,
+      totalFires: state.fires.length,
+      totalFireAcres: totalFireAcres,
+      totalEarthquakes: state.earthquakes.length,
       disastersByState,
       disasterTypes,
       alertsBySeverity,
@@ -181,6 +283,7 @@ ATLAS.data = (function () {
   function getAIContext(region) {
     let disasters = state.disasters;
     let alerts = state.alerts;
+    let fires = state.fires;
 
     // Filter by region if specified
     if (region) {
@@ -188,6 +291,7 @@ ATLAS.data = (function () {
       if (regionStates.length > 0) {
         disasters = disasters.filter(d => regionStates.includes(d.state));
         alerts = alerts.filter(a => a.states.some(s => regionStates.includes(s)));
+        fires = fires.filter(f => regionStates.includes(f.state));
       }
     }
 
@@ -204,6 +308,8 @@ ATLAS.data = (function () {
     return {
       disasters: Object.values(uniqueDisasters).slice(0, 40),
       alerts: alerts.slice(0, 40),
+      fires: fires.slice(0, 50),
+      earthquakes: state.earthquakes.slice(0, 20),
       region: region || 'National',
       summary: getSummary()
     };
@@ -232,7 +338,9 @@ ATLAS.data = (function () {
     getAIContext,
     getRegionStates,
     fetchDisasters,
-    fetchAlerts
+    fetchAlerts,
+    fetchFires,
+    fetchEarthquakes
   };
 
 })();

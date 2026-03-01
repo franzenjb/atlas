@@ -11,8 +11,13 @@ ATLAS.map = (function () {
   let map = null;
   let disasterLayer = null;
   let alertLayer = null;
+  let fireLayer = null;
+  let earthquakeLayer = null;
   let highlightLayer = null;
   let sviLayer = null;
+  let radarLayer = null;
+  let qpfLayer = null;
+  let wwaLayer = null;
   let pulseOverlays = [];
 
   // State coordinates for zooming
@@ -76,11 +81,14 @@ ATLAS.map = (function () {
         'esri/Graphic',
         'esri/layers/GraphicsLayer',
         'esri/layers/FeatureLayer',
+        'esri/layers/MapImageLayer',
         'esri/geometry/Extent'
-      ], function (Map, MapView, Graphic, GraphicsLayer, FeatureLayer, Extent) {
+      ], function (Map, MapView, Graphic, GraphicsLayer, FeatureLayer, MapImageLayer, Extent) {
 
         disasterLayer = new GraphicsLayer({ title: 'FEMA Disasters' });
         alertLayer = new GraphicsLayer({ title: 'NWS Alerts' });
+        fireLayer = new GraphicsLayer({ title: 'Active Wildfires' });
+        earthquakeLayer = new GraphicsLayer({ title: 'Earthquakes' });
         highlightLayer = new GraphicsLayer({ title: 'Highlights' });
 
         // CDC SVI layer from Living Atlas
@@ -101,9 +109,36 @@ ATLAS.map = (function () {
           }
         });
 
+        // NEXRAD Radar — live precipitation
+        radarLayer = new MapImageLayer({
+          url: 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity/MapServer',
+          title: 'Weather Radar',
+          visible: false,
+          opacity: 0.6,
+          sublayers: [{ id: 0 }]
+        });
+
+        // QPF — Quantitative Precipitation Forecast (Day 1)
+        qpfLayer = new MapImageLayer({
+          url: 'https://mapservices.weather.noaa.gov/vector/rest/services/precip/wpc_qpf/MapServer',
+          title: 'Precipitation Forecast',
+          visible: false,
+          opacity: 0.5,
+          sublayers: [{ id: 1 }]
+        });
+
+        // Watches/Warnings/Advisories — official NWS polygons
+        wwaLayer = new MapImageLayer({
+          url: 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer',
+          title: 'Watches & Warnings',
+          visible: false,
+          opacity: 0.5,
+          sublayers: [{ id: 1 }]
+        });
+
         map = new Map({
           basemap: 'dark-gray-vector',
-          layers: [sviLayer, alertLayer, disasterLayer, highlightLayer]
+          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
         });
 
         view = new MapView({
@@ -112,7 +147,7 @@ ATLAS.map = (function () {
           center: [-98.5, 39.8],
           zoom: 4,
           ui: { components: ['zoom', 'attribution'] },
-          popup: { autoOpenEnabled: false },
+          popup: { autoOpenEnabled: true, dockEnabled: false },
           constraints: { minZoom: 3 }
         });
 
@@ -135,7 +170,7 @@ ATLAS.map = (function () {
         view.on('click', function (event) {
           view.hitTest(event).then(function (response) {
             var result = response.results.find(function (r) {
-              return r.graphic.layer === disasterLayer || r.graphic.layer === alertLayer;
+              return r.graphic.layer === disasterLayer || r.graphic.layer === alertLayer || r.graphic.layer === fireLayer || r.graphic.layer === earthquakeLayer;
             });
             if (result && result.graphic.attributes) {
               var attrs = result.graphic.attributes;
@@ -259,6 +294,142 @@ ATLAS.map = (function () {
     console.log('[ATLAS] Added ' + alertLayer.graphics.length + ' alert graphics');
   }
 
+  // --- Add NIFC Wildfire Graphics ---
+  function addFires(fires) {
+    if (!fireLayer) return;
+    fireLayer.removeAll();
+
+    var Graphic = ATLAS.map._Graphic;
+
+    fires.forEach(function (f) {
+      if (!f.lat || !f.lon) return;
+
+      // Size by acreage: small(<100), medium(<1000), large(<10000), major(10000+)
+      var size = 6;
+      var color = [249, 115, 22]; // orange
+      if (f.acres >= 10000) {
+        size = 20;
+        color = [237, 27, 46]; // red — major fire
+      } else if (f.acres >= 1000) {
+        size = 14;
+        color = [249, 80, 22];
+      } else if (f.acres >= 100) {
+        size = 10;
+        color = [249, 115, 22];
+      }
+
+      var containedStr = f.percentContained != null ? f.percentContained + '%' : 'Unknown';
+      var acresStr = f.acres ? f.acres.toLocaleString() : 'Unknown';
+
+      var graphic = new Graphic({
+        geometry: {
+          type: 'point',
+          longitude: f.lon,
+          latitude: f.lat
+        },
+        symbol: {
+          type: 'simple-marker',
+          style: 'diamond',
+          color: color,
+          size: size,
+          outline: { color: [255, 255, 255, 200], width: 1.5 }
+        },
+        attributes: {
+          name: f.name,
+          state: f.state,
+          county: f.county,
+          acres: acresStr,
+          contained: containedStr,
+          personnel: f.personnel || 'N/A',
+          source: 'NIFC',
+          lat: f.lat,
+          lon: f.lon
+        },
+        popupTemplate: {
+          title: '<span style="font-family:\'Libre Baskerville\',serif;">{name}</span>',
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
+            '<b>Type:</b> Wildfire<br>' +
+            '<b>Location:</b> {county}, {state}<br>' +
+            '<b>Acres:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{acres}</span><br>' +
+            '<b>Contained:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{contained}</span><br>' +
+            '<b>Personnel:</b> {personnel}' +
+            '</div>'
+        }
+      });
+
+      fireLayer.add(graphic);
+    });
+
+    console.log('[ATLAS] Added ' + fireLayer.graphics.length + ' fire graphics');
+  }
+
+  // --- Add USGS Earthquake Graphics ---
+  function addEarthquakes(earthquakes) {
+    if (!earthquakeLayer) return;
+    earthquakeLayer.removeAll();
+
+    var Graphic = ATLAS.map._Graphic;
+
+    earthquakes.forEach(function (q) {
+      if (!q.lat || !q.lon) return;
+
+      // Size by magnitude
+      var size = 8;
+      var color = [139, 92, 246]; // purple
+      if (q.magnitude >= 7.0) {
+        size = 24;
+        color = [237, 27, 46]; // red
+      } else if (q.magnitude >= 6.0) {
+        size = 18;
+        color = [200, 60, 180];
+      } else if (q.magnitude >= 5.0) {
+        size = 13;
+        color = [160, 80, 220];
+      }
+
+      var timeStr = q.time ? new Date(q.time).toLocaleDateString() : 'Unknown';
+
+      var graphic = new Graphic({
+        geometry: {
+          type: 'point',
+          longitude: q.lon,
+          latitude: q.lat
+        },
+        symbol: {
+          type: 'simple-marker',
+          style: 'cross',
+          color: color,
+          size: size,
+          outline: { color: [255, 255, 255, 200], width: 2 }
+        },
+        attributes: {
+          magnitude: q.magnitude,
+          place: q.place,
+          time: timeStr,
+          depth: q.depth ? q.depth.toFixed(1) + ' km' : 'Unknown',
+          alert: q.alert || 'None',
+          source: 'USGS',
+          lat: q.lat,
+          lon: q.lon
+        },
+        popupTemplate: {
+          title: '<span style="font-family:\'Libre Baskerville\',serif;">M{magnitude} Earthquake</span>',
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
+            '<b>Location:</b> {place}<br>' +
+            '<b>Magnitude:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{magnitude}</span><br>' +
+            '<b>Date:</b> {time}<br>' +
+            '<b>Depth:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{depth}</span><br>' +
+            '<b>PAGER Alert:</b> {alert}' +
+            '</div>'
+        }
+      });
+
+      earthquakeLayer.add(graphic);
+    });
+
+    console.log('[ATLAS] Added ' + earthquakeLayer.graphics.length + ' earthquake graphics');
+  }
+
   // --- Zoom/Navigate ---
   function zoomTo(lat, lon, zoom) {
     if (!view) return;
@@ -335,6 +506,33 @@ ATLAS.map = (function () {
     if (sviLayer) sviLayer.visible = visible;
   }
 
+  // --- Layer Toggles ---
+  function toggleLayer(name) {
+    var layers = {
+      radar: radarLayer,
+      qpf: qpfLayer,
+      wwa: wwaLayer,
+      svi: sviLayer,
+      disasters: disasterLayer,
+      alerts: alertLayer,
+      fires: fireLayer,
+      quakes: earthquakeLayer
+    };
+    var layer = layers[name];
+    if (layer) {
+      layer.visible = !layer.visible;
+      console.log('[ATLAS] ' + name + ' layer: ' + (layer.visible ? 'ON' : 'OFF'));
+      return layer.visible;
+    }
+    return false;
+  }
+
+  function isLayerVisible(name) {
+    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
+    var layer = layers[name];
+    return layer ? layer.visible : false;
+  }
+
   // --- Execute AI Map Commands ---
   function executeMapCommands(commands) {
     if (!commands || !Array.isArray(commands)) return;
@@ -354,6 +552,8 @@ ATLAS.map = (function () {
     init: init,
     addDisasters: addDisasters,
     addAlerts: addAlerts,
+    addFires: addFires,
+    addEarthquakes: addEarthquakes,
     zoomTo: zoomTo,
     zoomToState: zoomToState,
     zoomToRegion: zoomToRegion,
@@ -361,6 +561,8 @@ ATLAS.map = (function () {
     highlightLocations: highlightLocations,
     clearHighlights: clearHighlights,
     showSVI: showSVI,
+    toggleLayer: toggleLayer,
+    isLayerVisible: isLayerVisible,
     executeMapCommands: executeMapCommands,
     stateCoords: stateCoords
   };

@@ -76,6 +76,59 @@ calcite-navigation-logo {
   padding-right: 8px;
 }
 
+/* --- Threat Level Badge --- */
+.threat-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-family: var(--dragon-data);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.threat-badge .threat-label {
+  opacity: 0.7;
+}
+
+.threat-badge .threat-value {
+  font-weight: 700;
+}
+
+.threat-badge[data-level="critical"] {
+  background: rgba(237, 27, 46, 0.25);
+  color: #ff6b7a;
+  border: 1px solid rgba(237, 27, 46, 0.4);
+  animation: threatPulse 2s ease-in-out infinite;
+}
+
+.threat-badge[data-level="high"] {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fba558;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.threat-badge[data-level="elevated"] {
+  background: rgba(234, 179, 8, 0.2);
+  color: #ebc95a;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.threat-badge[data-level="guarded"] {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+@keyframes threatPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 /* --- Intelligence Panel --- */
 #intel-panel {
   --calcite-shell-panel-width: 420px;
@@ -149,6 +202,23 @@ calcite-navigation-logo {
   font-weight: 700;
   margin: 0;
   color: var(--calcite-color-text-1);
+}
+
+/* --- Stagger Reveal Animation --- */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-in {
+  opacity: 0;
+  animation: fadeSlideIn 0.35s ease-out forwards;
 }
 
 /* --- Stat Cards (Metric Grid) --- */
@@ -391,6 +461,51 @@ calcite-navigation-logo {
   flex: 1;
 }
 
+/* --- Voice Button --- */
+#btn-voice.listening {
+  --calcite-color-foreground-2: rgba(237, 27, 46, 0.15);
+  color: var(--arc-red);
+  animation: voicePulse 1s ease-in-out infinite;
+}
+
+@keyframes voicePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* --- Layer Toggle Bar --- */
+#layer-bar {
+  position: absolute;
+  bottom: 24px;
+  left: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+  background: rgba(26, 24, 22, 0.85);
+  backdrop-filter: blur(8px);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--calcite-color-border-3);
+}
+
+.layer-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  align-self: center;
+  margin: 0 2px;
+}
+
+#layer-bar calcite-chip {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+#layer-bar calcite-chip.active {
+  --calcite-color-foreground-2: rgba(237, 27, 46, 0.15);
+  color: var(--arc-red);
+}
+
 /* --- Map Graphics Popup Override --- */
 .esri-popup__main-container {
   font-family: var(--dragon-body) !important;
@@ -427,5 +542,9 @@ calcite-navigation-logo {
 
   .stat-value {
     font-size: 22px;
+  }
+
+  .threat-badge {
+    display: none;
   }
 }

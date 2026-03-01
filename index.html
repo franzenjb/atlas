@@ -31,6 +31,10 @@
       description="AI Threat-Level Analysis System">
     </calcite-navigation-logo>
     <div slot="content-end" class="header-actions">
+      <div id="threat-level" class="threat-badge" data-level="guarded" style="display:none">
+        <span class="threat-label">THREAT LEVEL</span>
+        <span class="threat-value">GUARDED</span>
+      </div>
       <calcite-chip id="data-status" kind="brand" scale="s" icon="clock">
         Loading data...
       </calcite-chip>
@@ -40,6 +44,19 @@
   <!-- MAP (main content area) -->
   <div id="viewDiv"></div>
   <calcite-scrim id="map-scrim" loading></calcite-scrim>
+
+  <!-- Layer Toggle Bar -->
+  <div id="layer-bar">
+    <calcite-chip id="toggle-disasters" scale="s" icon="exclamation-mark-triangle" kind="neutral" appearance="outline-fill" class="active">Disasters</calcite-chip>
+    <calcite-chip id="toggle-alerts" scale="s" icon="exclamation-mark-circle" kind="neutral" appearance="outline-fill" class="active">Alerts</calcite-chip>
+    <calcite-chip id="toggle-fires" scale="s" icon="flame" kind="neutral" appearance="outline-fill" class="active">Fires</calcite-chip>
+    <calcite-chip id="toggle-quakes" scale="s" icon="pin-tear" kind="neutral" appearance="outline-fill" class="active">Quakes</calcite-chip>
+    <span class="layer-divider"></span>
+    <calcite-chip id="toggle-radar" scale="s" icon="satellite" kind="neutral" appearance="outline-fill">Radar</calcite-chip>
+    <calcite-chip id="toggle-qpf" scale="s" icon="partly-cloudy" kind="neutral" appearance="outline-fill">QPF</calcite-chip>
+    <calcite-chip id="toggle-wwa" scale="s" icon="exclamation-mark-triangle" kind="neutral" appearance="outline-fill">Warnings</calcite-chip>
+    <calcite-chip id="toggle-svi" scale="s" icon="urban-model" kind="neutral" appearance="outline-fill">SVI</calcite-chip>
+  </div>
 
   <!-- INTELLIGENCE PANEL (right side) -->
   <calcite-shell-panel slot="panel-end" display-mode="float" width-scale="l" id="intel-panel">
@@ -60,8 +77,8 @@
         <div id="welcome-state" class="intel-section">
           <div class="red-rule"></div>
           <h3 class="dragon-headline">Disaster Intelligence</h3>
-          <p class="dragon-body">ATLAS analyzes real-time FEMA disaster declarations, NWS severe weather alerts, and CDC social vulnerability data to produce executive-grade intelligence.</p>
-          <p class="dragon-body muted">Select a scenario below or type a question to begin.</p>
+          <p class="dragon-body">ATLAS analyzes real-time FEMA disaster declarations, NWS severe weather alerts, NIFC wildfire data, and USGS seismic activity to produce executive-grade intelligence.</p>
+          <p class="dragon-body muted">Select a scenario below, type a question, or use voice input to begin.</p>
         </div>
 
         <!-- AI Response Area (hidden until query) -->
@@ -100,6 +117,16 @@
           <calcite-button id="btn-weather" appearance="outline-fill" kind="neutral" icon-start="partly-cloudy" scale="s">
             Severe Weather
           </calcite-button>
+          <calcite-button id="btn-fires" appearance="outline-fill" kind="neutral" icon-start="flame" scale="s">
+            Active Wildfires
+          </calcite-button>
+        </div>
+
+        <!-- Scenario Buttons (Brief mode) -->
+        <div id="brief-scenarios" class="scenario-bar" style="display:none">
+          <calcite-button id="btn-briefing" appearance="outline-fill" kind="neutral" icon-start="file-report" scale="s">
+            Generate Executive Briefing
+          </calcite-button>
         </div>
 
         <!-- Scenario Buttons (Assess mode) -->
@@ -113,11 +140,15 @@
           <calcite-button id="btn-earthquake" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-triangle" scale="s">
             Earthquake: West Coast
           </calcite-button>
+          <calcite-button id="btn-wildfire-assess" appearance="outline-fill" kind="neutral" icon-start="flame" scale="s">
+            Wildfire Assessment
+          </calcite-button>
         </div>
 
-        <!-- Text Input -->
+        <!-- Text Input + Voice -->
         <div class="input-bar">
           <calcite-input id="query-input" type="text" placeholder="Ask ATLAS a question..." icon="search" clearable scale="m"></calcite-input>
+          <calcite-button id="btn-voice" kind="neutral" appearance="outline-fill" icon-start="speech-bubbles" scale="m" title="Voice input"></calcite-button>
           <calcite-button id="btn-submit" kind="brand" icon-start="send" scale="m">Analyze</calcite-button>
         </div>
       </div>

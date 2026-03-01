@@ -1,6 +1,7 @@
 /* ============================================================
    ATLAS AI Module
    Sends queries to /api/chat, renders structured responses
+   with staggered reveal animations
    ============================================================ */
 
 window.ATLAS = window.ATLAS || {};
@@ -80,6 +81,24 @@ ATLAS.ai = (function () {
     document.getElementById('welcome-state').hidden = true;
     document.getElementById('loading-state').hidden = true;
     container.hidden = false;
+
+    // Stagger reveal all rendered elements
+    animateResponse();
+  }
+
+  // --- Staggered Reveal Animation ---
+  function animateResponse() {
+    var items = document.querySelectorAll(
+      '#response-narrative .intel-section > *, ' +
+      '#response-metrics .intel-section > *, #response-metrics .stat-card, ' +
+      '#response-rankings .intel-section > *, #response-rankings .ranking-item, ' +
+      '#response-actions .intel-section > *, #response-actions .action-item'
+    );
+
+    items.forEach(function (item, i) {
+      item.classList.add('stagger-in');
+      item.style.animationDelay = (i * 0.06) + 's';
+    });
   }
 
   // --- Render Narrative ---
@@ -88,8 +107,13 @@ ATLAS.ai = (function () {
     html += '<div class="red-rule"></div>';
     html += '<h3 class="dragon-headline">Intelligence Assessment</h3>';
 
+    // Convert [[loc:Name:lat:lon]] to clickable spans
+    var processed = text.replace(/\[\[loc:(.*?):([-\d.]+):([-\d.]+)\]\]/g, function (match, name, lat, lon) {
+      return '<span class="location-link" data-lat="' + lat + '" data-lon="' + lon + '">' + name + '</span>';
+    });
+
     // Convert **bold** to <strong> and split paragraphs
-    var formatted = text
+    var formatted = processed
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .split('\n\n')
       .filter(function (p) { return p.trim(); })
@@ -98,12 +122,24 @@ ATLAS.ai = (function () {
 
     // If it's a single block without double-newlines, just wrap it
     if (!formatted) {
-      formatted = '<p class="narrative-text">' + text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') + '</p>';
+      formatted = '<p class="narrative-text">' + processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') + '</p>';
     }
 
     html += formatted;
     html += '</div>';
     el.innerHTML = html;
+
+    // Wire click handlers on location links
+    el.querySelectorAll('.location-link').forEach(function (link) {
+      link.addEventListener('click', function () {
+        var lat = parseFloat(link.dataset.lat);
+        var lon = parseFloat(link.dataset.lon);
+        if (lat && lon) {
+          ATLAS.map.zoomTo(lat, lon, 8);
+          ATLAS.map.highlightLocations([{ lat: lat, lon: lon }]);
+        }
+      });
+    });
   }
 
   // --- Render Metric Cards ---

@@ -26,7 +26,7 @@
   <!-- HEADER -->
   <calcite-navigation slot="header">
     <calcite-navigation-logo slot="logo"
-      icon="layer-map-analytics"
+      icon="layer-overview"
       heading="ATLAS"
       description="AI Threat-Level Analysis System">
     </calcite-navigation-logo>
@@ -103,11 +103,11 @@
         </div>
 
         <!-- Scenario Buttons (Assess mode) -->
-        <div id="assess-scenarios" class="scenario-bar" hidden>
-          <calcite-button id="btn-hurricane" appearance="outline-fill" kind="neutral" icon-start="hurricane-warning" scale="s">
+        <div id="assess-scenarios" class="scenario-bar" style="display:none">
+          <calcite-button id="btn-hurricane" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-circle" scale="s">
             Hurricane: Gulf Coast
           </calcite-button>
-          <calcite-button id="btn-tornado" appearance="outline-fill" kind="neutral" icon-start="hurricane-warning" scale="s">
+          <calcite-button id="btn-tornado" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-circle" scale="s">
             Severe Weather: Tornado Alley
           </calcite-button>
           <calcite-button id="btn-earthquake" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-triangle" scale="s">

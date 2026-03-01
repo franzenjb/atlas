@@ -87,8 +87,8 @@
     currentMode = mode;
 
     // Toggle scenario bars
-    document.getElementById('ask-scenarios').hidden = mode !== 'ask';
-    document.getElementById('assess-scenarios').hidden = mode !== 'assess';
+    document.getElementById('ask-scenarios').style.display = mode === 'ask' ? 'flex' : 'none';
+    document.getElementById('assess-scenarios').style.display = mode === 'assess' ? 'flex' : 'none';
 
     // Update input placeholder
     var input = document.getElementById('query-input');

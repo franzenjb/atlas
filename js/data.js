@@ -23,7 +23,8 @@ ATLAS.data = (function () {
       cutoff.setDate(cutoff.getDate() - 365);
       const cutoffStr = cutoff.toISOString().split('T')[0];
 
-      const url = `https://www.fema.gov/api/open/v2/DisasterDeclarations?$filter=declarationDate ge '${cutoffStr}' and disasterCloseoutDate eq null&$orderby=declarationDate desc&$top=200`;
+      // Use server proxy to avoid CORS
+      const url = '/api/fema';
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`FEMA API: ${res.status}`);

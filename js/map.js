@@ -85,7 +85,7 @@ ATLAS.map = (function () {
 
         // CDC SVI layer from Living Atlas
         sviLayer = new FeatureLayer({
-          url: 'https://services3.arcgis.com/ZvidGQkLaDJxRSJ2/arcgis/rest/services/CDC_Social_Vulnerability_Index_2022/FeatureServer/0',
+          url: 'https://services3.arcgis.com/ZvidGQkLaDJxRSJ2/arcgis/rest/services/CDC_ATSDR_Social_Vulnerability_Index_2022_USA/FeatureServer/1',
           title: 'Social Vulnerability Index',
           visible: false,
           opacity: 0.5,

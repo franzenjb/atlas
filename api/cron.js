@@ -248,7 +248,7 @@ RESPONSE FORMAT: Respond with valid JSON only — no markdown fences, no text ou
   "mapCommands": [{"type": "zoom", "target": {"lat": 29.7, "lon": -95.3, "zoom": 6}}]
 }
 
-Provide 4-6 metrics, 5-7 rankings, 4-6 actions. Use ONLY the provided data. Never fabricate.`,
+Provide 4-6 metrics, 5-7 rankings, 4-6 actions. Use ONLY the provided data. Never fabricate. All lat/lon coordinates MUST be within the continental US (lat 24-50, lon -125 to -66). Do not reference or zoom to locations outside the US.`,
       messages: [{ role: 'user', content: `Generate a comprehensive executive intelligence briefing.\n${dataContext}\n\nRespond with valid JSON only. No markdown code fences. No text before or after the JSON object.` }]
     });
 

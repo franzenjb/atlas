@@ -66,7 +66,10 @@
       if (data && data.briefing) {
         console.log('[ATLAS] Cached briefing loaded from', data.generatedAt);
         ATLAS.ai.renderCachedBanner(data.generatedAt);
-        ATLAS.ai.renderResponse(data.briefing);
+        // Don't execute mapCommands from cached briefings — keep CONUS view on load
+        var briefing = data.briefing;
+        briefing.mapCommands = [];
+        ATLAS.ai.renderResponse(briefing);
       }
     } catch (err) {
       console.log('[ATLAS] Cached briefing fetch failed (graceful fallback):', err.message);

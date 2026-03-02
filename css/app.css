@@ -129,6 +129,36 @@ calcite-navigation-logo {
   50% { opacity: 0.7; }
 }
 
+/* --- Briefing Banner --- */
+.briefing-banner {
+  background: rgba(58, 122, 189, 0.12);
+  border: 1px solid rgba(58, 122, 189, 0.3);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--dragon-data);
+  font-size: 11px;
+  color: var(--arc-info);
+  letter-spacing: 0.3px;
+}
+
+.briefing-banner .banner-icon {
+  flex-shrink: 0;
+}
+
+.briefing-banner .banner-text {
+  flex: 1;
+}
+
+.briefing-banner .banner-live {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* --- Intelligence Panel --- */
 #intel-panel {
   --calcite-shell-panel-width: 420px;

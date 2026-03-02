@@ -18,6 +18,9 @@ ATLAS.map = (function () {
   let radarLayer = null;
   let qpfLayer = null;
   let wwaLayer = null;
+  let spcLayer = null;
+  let nhcLayer = null;
+  let eroLayer = null;
   let pulseOverlays = [];
 
   // State coordinates for zooming
@@ -136,9 +139,35 @@ ATLAS.map = (function () {
           sublayers: [{ id: 1 }]
         });
 
+        // SPC Convective Outlook — tornado/severe risk areas
+        spcLayer = new MapImageLayer({
+          url: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer',
+          title: 'SPC Convective Outlook',
+          visible: false,
+          opacity: 0.5,
+          sublayers: [{ id: 1 }] // Day 1 categorical
+        });
+
+        // NHC Tropical Weather — active storms, forecast cones
+        nhcLayer = new MapImageLayer({
+          url: 'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer',
+          title: 'NHC Tropical',
+          visible: false,
+          opacity: 0.6
+        });
+
+        // WPC Excessive Rainfall Outlook — flash flood risk
+        eroLayer = new MapImageLayer({
+          url: 'https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer',
+          title: 'Excessive Rainfall Outlook',
+          visible: false,
+          opacity: 0.5,
+          sublayers: [{ id: 0 }] // Day 1 ERO
+        });
+
         map = new Map({
           basemap: 'dark-gray-vector',
-          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
+          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
         });
 
         view = new MapView({
@@ -513,6 +542,9 @@ ATLAS.map = (function () {
       qpf: qpfLayer,
       wwa: wwaLayer,
       svi: sviLayer,
+      spc: spcLayer,
+      nhc: nhcLayer,
+      ero: eroLayer,
       disasters: disasterLayer,
       alerts: alertLayer,
       fires: fireLayer,
@@ -528,7 +560,7 @@ ATLAS.map = (function () {
   }
 
   function isLayerVisible(name) {
-    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
+    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, spc: spcLayer, nhc: nhcLayer, ero: eroLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
     var layer = layers[name];
     return layer ? layer.visible : false;
   }

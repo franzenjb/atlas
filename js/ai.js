@@ -257,9 +257,35 @@ ATLAS.ai = (function () {
     return div.innerHTML;
   }
 
+  // --- Render Cached Briefing Banner ---
+  function renderCachedBanner(generatedAt) {
+    var banner = document.getElementById('briefing-banner');
+    if (!banner || !generatedAt) return;
+
+    var generated = new Date(generatedAt);
+    var now = new Date();
+    var diffMs = now - generated;
+    var diffMins = Math.floor(diffMs / 60000);
+    var timeAgo;
+    if (diffMins < 60) {
+      timeAgo = diffMins + ' min ago';
+    } else {
+      var diffHrs = Math.floor(diffMins / 60);
+      timeAgo = diffHrs + (diffHrs === 1 ? ' hour ago' : ' hours ago');
+    }
+
+    banner.innerHTML = '<span class="banner-icon">&#9432;</span>' +
+      '<span class="banner-text">Briefing generated <strong>' + timeAgo + '</strong> &mdash; ' +
+      generated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) +
+      '</span>' +
+      '<span class="banner-live">CACHED</span>';
+    banner.hidden = false;
+  }
+
   return {
     analyze: analyze,
     renderResponse: renderResponse,
+    renderCachedBanner: renderCachedBanner,
     showLoading: showLoading,
     hideLoading: hideLoading,
     showError: showError

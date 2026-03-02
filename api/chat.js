@@ -8,6 +8,10 @@ DATA SOURCES AVAILABLE:
 2. NWS Severe Weather Alerts — active watches, warnings, advisories with severity and affected areas
 3. NIFC Active Wildfires — real-time wildfire incidents with acres burned, containment %, personnel deployed, coordinates, cause, cost
 4. USGS Earthquakes — M4.5+ earthquakes from the last 30 days with magnitude, location, depth, PAGER alert level
+5. Breaking News — mass casualty events, building collapses, explosions, industrial accidents, transportation disasters from last 24 hours
+6. SPC Convective Outlook — Day 1-3 tornado/severe thunderstorm risk areas (MARGINAL to HIGH)
+7. NHC Tropical Outlook — active tropical storms/hurricanes with wind speed, track, and forecast cones
+8. WPC Excessive Rainfall Outlook — Day 1-3 flash flood risk areas
 
 RESPONSE FORMAT: You MUST respond with valid JSON matching this exact structure:
 {
@@ -33,9 +37,12 @@ RULES:
 - Metrics array should have 3-4 items. Rankings should have 3-5 items. Actions should have 3-4 items.
 - mapCommands should have 1-2 items — the most important views.
 - Severity levels: critical (life-threatening/major), high (significant), moderate (notable), low (monitor).
-- Keep the narrative under 200 words. Be specific with numbers and locations.
-- For Brief mode, write a longer narrative (300-400 words) covering all threat categories systematically.
+- Keep the narrative under 150 words. Be specific with numbers and locations. Be concise — no filler.
+- Keep action text under 40 words each. Keep rationale under 30 words each.
+- Keep ranking factors under 30 words each. Prioritize data over prose.
+- For Brief mode, narrative can be 200-250 words covering all threat categories.
 - For Assess mode, focus on the specific region/scenario and provide deployment-ready recommendations.
+- CRITICAL: Output ONLY the JSON object. No text before or after. No markdown fences. No headers.
 
 WILDFIRE ANALYSIS:
 - Prioritize large uncontained fires. Include acreage, containment %, and personnel in your analysis.
@@ -47,6 +54,19 @@ EARTHQUAKE ANALYSIS:
 - M6.0+ is critical, M5.0-5.9 is high, M4.5-4.9 is moderate.
 - Include depth and PAGER alert level when available.
 - Cross-reference earthquake locations with population density and known fault zones.
+
+BREAKING NEWS ANALYSIS:
+- If breaking news data is provided, assess each event for Red Cross operational relevance.
+- Mass casualty events, building collapses, and transportation disasters may require immediate shelter/feeding response.
+- Integrate breaking events into the narrative and rankings where they represent significant threats.
+- If no breaking news is provided, do not mention it.
+
+STORM OUTLOOK ANALYSIS:
+- If SPC Convective Outlook data is provided, incorporate tornado/severe weather risk into threat assessment.
+- If NHC Tropical data is provided, factor tropical systems into the narrative with wind speed and track.
+- If WPC Excessive Rainfall data is provided, include flash flood risk areas.
+- Risk levels: MARGINAL < SLIGHT < ENHANCED < MODERATE < HIGH. MODERATE and HIGH are rare and critical.
+- If no outlook data is provided, do not mention it.
 
 LOCATION LINKS: In the narrative text, make location names clickable by wrapping them with this syntax: [[loc:Display Name:lat:lon]]. Example: "The [[loc:National Fire:26.12:-81.34]] in Collier County burns 35,034 acres." The frontend will render these as clickable links that zoom the map. Use lat/lon from the data provided. Apply this to 2-4 key locations mentioned in the narrative — don't overdo it.`;
 
@@ -92,6 +112,22 @@ module.exports = async function handler(req, res) {
         dataContext += `\n\nRECENT EARTHQUAKES M4.5+ (${context.earthquakes.length} in last 30 days, from USGS):\n`;
         dataContext += JSON.stringify(context.earthquakes.slice(0, 15), null, 0);
       }
+      if (context.breakingNews && context.breakingNews.length > 0) {
+        dataContext += `\n\nBREAKING NEWS / MASS CASUALTY EVENTS (${context.breakingNews.length} in last 24h):\n`;
+        dataContext += JSON.stringify(context.breakingNews.slice(0, 10), null, 0);
+      }
+      if (context.spcOutlook && context.spcOutlook.length > 0) {
+        dataContext += `\n\nSPC CONVECTIVE OUTLOOK (tornado/severe risk):\n`;
+        dataContext += JSON.stringify(context.spcOutlook, null, 0);
+      }
+      if (context.nhcOutlook && context.nhcOutlook.length > 0) {
+        dataContext += `\n\nNHC TROPICAL OUTLOOK:\n`;
+        dataContext += JSON.stringify(context.nhcOutlook, null, 0);
+      }
+      if (context.eroOutlook && context.eroOutlook.length > 0) {
+        dataContext += `\n\nWPC EXCESSIVE RAINFALL OUTLOOK (flood risk):\n`;
+        dataContext += JSON.stringify(context.eroOutlook, null, 0);
+      }
       if (context.region) {
         dataContext += `\n\nFOCUS REGION: ${context.region}`;
       }
@@ -105,10 +141,16 @@ Respond with valid JSON only. No markdown code fences. No text before or after t
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }]
     });
+
+    // Check if response was truncated
+    const wasTruncated = message.stop_reason === 'max_tokens';
+    if (wasTruncated) {
+      console.warn('[ATLAS] Response was truncated by max_tokens limit');
+    }
 
     // Extract text content
     const responseText = message.content
@@ -116,21 +158,60 @@ Respond with valid JSON only. No markdown code fences. No text before or after t
       .map(block => block.text)
       .join('');
 
-    // Parse JSON response — extract first {...} block, ignore any surrounding text
+    // Parse JSON response
     let parsed;
     try {
-      // Find the first { and last } to extract the JSON object
+      // Find the first { to start of JSON object
       const startIdx = responseText.indexOf('{');
-      const endIdx = responseText.lastIndexOf('}');
-      if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-        throw new Error('No JSON object found in response');
+      if (startIdx === -1) throw new Error('No JSON object found');
+
+      let jsonStr = responseText.substring(startIdx);
+
+      // If truncated, try to close the JSON structure
+      if (wasTruncated) {
+        // Close any open strings, arrays, and objects
+        jsonStr = jsonStr.replace(/,\s*"[^"]*$/, ''); // remove trailing partial key
+        jsonStr = jsonStr.replace(/,\s*$/, '');        // remove trailing comma
+        // Count unclosed brackets and braces
+        let openBraces = 0, openBrackets = 0, inString = false, escape = false;
+        for (let i = 0; i < jsonStr.length; i++) {
+          const c = jsonStr[i];
+          if (escape) { escape = false; continue; }
+          if (c === '\\') { escape = true; continue; }
+          if (c === '"') { inString = !inString; continue; }
+          if (inString) continue;
+          if (c === '{') openBraces++;
+          else if (c === '}') openBraces--;
+          else if (c === '[') openBrackets++;
+          else if (c === ']') openBrackets--;
+        }
+        // If we're inside a string, close it
+        if (inString) jsonStr += '"';
+        // Close arrays then objects
+        for (let i = 0; i < openBrackets; i++) jsonStr += ']';
+        for (let i = 0; i < openBraces; i++) jsonStr += '}';
       }
-      const jsonStr = responseText.substring(startIdx, endIdx + 1);
-      parsed = JSON.parse(jsonStr);
+
+      // Try parsing, fall back to extracting between first { and last }
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (e) {
+        const endIdx = jsonStr.lastIndexOf('}');
+        if (endIdx > 0) {
+          parsed = JSON.parse(jsonStr.substring(0, endIdx + 1));
+        } else {
+          throw e;
+        }
+      }
     } catch (parseErr) {
-      // If JSON parse fails, wrap raw text as narrative
+      console.error('[ATLAS] JSON parse failed:', parseErr.message);
+      // Last resort: show as narrative without raw JSON
+      let cleanText = responseText
+        .replace(/```json\n?/g, '').replace(/```\n?/g, '')
+        .replace(/^\s*\{[\s\S]*/, 'Analysis could not be formatted. Please try again.')
+        .trim();
       parsed = {
-        narrative: responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').replace(/^\s*\{[\s\S]*\}\s*$/, '').trim() || responseText,
+        narrative: cleanText || 'Analysis could not be formatted. Please try again.',
         metrics: [],
         rankings: [],
         actions: [],

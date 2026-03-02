@@ -1,0 +1,18 @@
+name: ATLAS Briefing Cron
+
+on:
+  schedule:
+    # Every 12 hours — 6 AM and 6 PM UTC
+    - cron: '0 6,18 * * *'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  generate-briefing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger briefing generation
+        run: |
+          curl -sf -X POST \
+            "${{ secrets.VERCEL_APP_URL }}/api/cron?secret=${{ secrets.CRON_SECRET }}" \
+            --max-time 120 \
+            -H "Content-Type: application/json"

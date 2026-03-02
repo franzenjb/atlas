@@ -4,6 +4,7 @@
   "private": true,
   "description": "ATLAS — AI Threat-Level Analysis System",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@vercel/blob": "^2.3.0"
   }
 }

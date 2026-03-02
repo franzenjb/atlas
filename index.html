@@ -47,15 +47,19 @@
 
   <!-- Layer Toggle Bar -->
   <div id="layer-bar">
-    <calcite-chip id="toggle-disasters" scale="s" icon="exclamation-mark-triangle" kind="neutral" appearance="outline-fill" class="active">Disasters</calcite-chip>
-    <calcite-chip id="toggle-alerts" scale="s" icon="exclamation-mark-circle" kind="neutral" appearance="outline-fill" class="active">Alerts</calcite-chip>
+    <calcite-chip id="toggle-disasters" scale="s" icon="government" kind="neutral" appearance="outline-fill" class="active">Disasters</calcite-chip>
+    <calcite-chip id="toggle-alerts" scale="s" icon="bell" kind="neutral" appearance="outline-fill" class="active">Alerts</calcite-chip>
     <calcite-chip id="toggle-fires" scale="s" icon="flame" kind="neutral" appearance="outline-fill" class="active">Fires</calcite-chip>
-    <calcite-chip id="toggle-quakes" scale="s" icon="pin-tear" kind="neutral" appearance="outline-fill" class="active">Quakes</calcite-chip>
+    <calcite-chip id="toggle-quakes" scale="s" icon="graph-bar-side-by-side" kind="neutral" appearance="outline-fill" class="active">Quakes</calcite-chip>
     <span class="layer-divider"></span>
     <calcite-chip id="toggle-radar" scale="s" icon="satellite" kind="neutral" appearance="outline-fill">Radar</calcite-chip>
-    <calcite-chip id="toggle-qpf" scale="s" icon="partly-cloudy" kind="neutral" appearance="outline-fill">QPF</calcite-chip>
-    <calcite-chip id="toggle-wwa" scale="s" icon="exclamation-mark-triangle" kind="neutral" appearance="outline-fill">Warnings</calcite-chip>
-    <calcite-chip id="toggle-svi" scale="s" icon="urban-model" kind="neutral" appearance="outline-fill">SVI</calcite-chip>
+    <calcite-chip id="toggle-qpf" scale="s" icon="drop" kind="neutral" appearance="outline-fill">QPF</calcite-chip>
+    <calcite-chip id="toggle-wwa" scale="s" icon="caution" kind="neutral" appearance="outline-fill">Warnings</calcite-chip>
+    <calcite-chip id="toggle-svi" scale="s" icon="users" kind="neutral" appearance="outline-fill">SVI</calcite-chip>
+    <span class="layer-divider"></span>
+    <calcite-chip id="toggle-spc" scale="s" icon="bolt" kind="neutral" appearance="outline-fill">Severe</calcite-chip>
+    <calcite-chip id="toggle-nhc" scale="s" icon="compass" kind="neutral" appearance="outline-fill">Tropical</calcite-chip>
+    <calcite-chip id="toggle-ero" scale="s" icon="droplet" kind="neutral" appearance="outline-fill">Flood Risk</calcite-chip>
   </div>
 
   <!-- INTELLIGENCE PANEL (right side) -->
@@ -73,6 +77,9 @@
 
       <!-- Intelligence Output Area -->
       <div id="intel-output">
+        <!-- Cached Briefing Banner -->
+        <div id="briefing-banner" class="briefing-banner" hidden></div>
+
         <!-- Welcome state -->
         <div id="welcome-state" class="intel-section">
           <div class="red-rule"></div>
@@ -119,6 +126,12 @@
           </calcite-button>
           <calcite-button id="btn-fires" appearance="outline-fill" kind="neutral" icon-start="flame" scale="s">
             Active Wildfires
+          </calcite-button>
+          <calcite-button id="btn-breaking" appearance="outline-fill" kind="neutral" icon-start="megaphone" scale="s">
+            Breaking Events
+          </calcite-button>
+          <calcite-button id="btn-outlook" appearance="outline-fill" kind="neutral" icon-start="bolt" scale="s">
+            Storm Outlook
           </calcite-button>
         </div>
 

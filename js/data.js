@@ -12,6 +12,10 @@ ATLAS.data = (function () {
     alerts: [],
     fires: [],
     earthquakes: [],
+    breakingNews: [],
+    spcOutlook: [],
+    nhcOutlook: [],
+    eroOutlook: [],
     loading: false,
     lastFetch: null,
     errors: []
@@ -213,6 +217,93 @@ ATLAS.data = (function () {
     }
   }
 
+  // --- Breaking News / Mass Casualty Events ---
+  async function fetchBreakingNews() {
+    try {
+      const res = await fetch('/api/news');
+      if (!res.ok) return [];
+      const data = await res.json();
+      state.breakingNews = data.news || [];
+      console.log('[ATLAS] Loaded ' + state.breakingNews.length + ' breaking news items');
+      return state.breakingNews;
+    } catch (err) {
+      console.error('[ATLAS] News fetch error:', err);
+      state.errors.push({ source: 'News', error: err.message });
+      return [];
+    }
+  }
+
+  // --- SPC Convective Outlook ---
+  async function fetchSPCOutlook() {
+    try {
+      const url = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/1/query' +
+        '?where=1%3D1&outFields=LABEL,LABEL2,stroke,fill,dn,idp_source&f=json&returnGeometry=false';
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      state.spcOutlook = (data.features || []).map(function (f) {
+        return {
+          riskLevel: f.attributes.LABEL || f.attributes.LABEL2,
+          category: f.attributes.dn,
+          source: 'SPC Day 1 Convective Outlook'
+        };
+      });
+      console.log('[ATLAS] Loaded ' + state.spcOutlook.length + ' SPC outlook areas');
+      return state.spcOutlook;
+    } catch (err) {
+      console.error('[ATLAS] SPC fetch error:', err);
+      return [];
+    }
+  }
+
+  // --- NHC Tropical Outlook ---
+  async function fetchNHCOutlook() {
+    try {
+      const url = 'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer/0/query' +
+        '?where=1%3D1&outFields=*&f=json&returnGeometry=false&resultRecordCount=10';
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      state.nhcOutlook = (data.features || []).map(function (f) {
+        return {
+          name: f.attributes.STORMNAME || f.attributes.NAME || 'Unnamed',
+          type: f.attributes.STORMTYPE || f.attributes.TYPE || 'Unknown',
+          windSpeed: f.attributes.MAXWIND || f.attributes.INTENSITY,
+          movement: f.attributes.MOVEMENT || f.attributes.MVMT,
+          source: 'NHC Tropical Outlook'
+        };
+      });
+      console.log('[ATLAS] Loaded ' + state.nhcOutlook.length + ' NHC tropical features');
+      return state.nhcOutlook;
+    } catch (err) {
+      console.error('[ATLAS] NHC fetch error:', err);
+      return [];
+    }
+  }
+
+  // --- WPC Excessive Rainfall Outlook ---
+  async function fetchEROOutlook() {
+    try {
+      const url = 'https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer/0/query' +
+        '?where=1%3D1&outFields=LABEL,LABEL2,stroke,fill,dn,idp_source&f=json&returnGeometry=false';
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      state.eroOutlook = (data.features || []).map(function (f) {
+        return {
+          riskLevel: f.attributes.LABEL || f.attributes.LABEL2,
+          category: f.attributes.dn,
+          source: 'WPC Day 1 Excessive Rainfall Outlook'
+        };
+      });
+      console.log('[ATLAS] Loaded ' + state.eroOutlook.length + ' ERO outlook areas');
+      return state.eroOutlook;
+    } catch (err) {
+      console.error('[ATLAS] ERO fetch error:', err);
+      return [];
+    }
+  }
+
   // Extract state abbreviations from area description
   function extractStates(areaDesc) {
     if (!areaDesc) return [];
@@ -230,7 +321,11 @@ ATLAS.data = (function () {
         fetchDisasters(),
         fetchAlerts(),
         fetchFires(),
-        fetchEarthquakes()
+        fetchEarthquakes(),
+        fetchBreakingNews(),
+        fetchSPCOutlook(),
+        fetchNHCOutlook(),
+        fetchEROOutlook()
       ]);
 
       state.lastFetch = new Date();
@@ -310,6 +405,10 @@ ATLAS.data = (function () {
       alerts: alerts.slice(0, 40),
       fires: fires.slice(0, 50),
       earthquakes: state.earthquakes.slice(0, 20),
+      breakingNews: state.breakingNews.slice(0, 10),
+      spcOutlook: state.spcOutlook,
+      nhcOutlook: state.nhcOutlook,
+      eroOutlook: state.eroOutlook,
       region: region || 'National',
       summary: getSummary()
     };
@@ -340,7 +439,11 @@ ATLAS.data = (function () {
     fetchDisasters,
     fetchAlerts,
     fetchFires,
-    fetchEarthquakes
+    fetchEarthquakes,
+    fetchBreakingNews,
+    fetchSPCOutlook,
+    fetchNHCOutlook,
+    fetchEROOutlook
   };
 
 })();

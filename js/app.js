@@ -17,6 +17,9 @@
     // Init map
     await ATLAS.map.init();
 
+    // Try to load cached briefing immediately (non-blocking)
+    loadCachedBriefing();
+
     // Load data
     updateStatus('Loading data...', 'brand');
     await ATLAS.data.loadAll();
@@ -37,6 +40,9 @@
     if (summary.totalEarthquakes > 0) {
       statusParts.push(summary.totalEarthquakes + ' quakes');
     }
+    if (ATLAS.data.state.breakingNews && ATLAS.data.state.breakingNews.length > 0) {
+      statusParts.push(ATLAS.data.state.breakingNews.length + ' breaking');
+    }
     updateStatus(statusParts.join(' \u00B7 '), 'brand');
 
     // Compute and display threat level
@@ -46,6 +52,25 @@
     wireEvents();
 
     console.log('[ATLAS] Ready');
+  }
+
+  // --- Load Cached Briefing ---
+  async function loadCachedBriefing() {
+    try {
+      var res = await fetch('/api/briefing');
+      if (!res.ok) {
+        console.log('[ATLAS] No cached briefing available');
+        return;
+      }
+      var data = await res.json();
+      if (data && data.briefing) {
+        console.log('[ATLAS] Cached briefing loaded from', data.generatedAt);
+        ATLAS.ai.renderCachedBanner(data.generatedAt);
+        ATLAS.ai.renderResponse(data.briefing);
+      }
+    } catch (err) {
+      console.log('[ATLAS] Cached briefing fetch failed (graceful fallback):', err.message);
+    }
   }
 
   // --- Wire Events ---
@@ -87,6 +112,14 @@
       runScenario('Analyze all active wildfires. Which fires are the most dangerous based on size, containment percentage, and proximity to populated areas? Provide a state-by-state breakdown of fire activity. Rank the top fire threats and include personnel deployed, acreage, and containment status. Provide deployment recommendations for Red Cross sheltering operations.', 'ask');
     });
 
+    document.getElementById('btn-breaking').addEventListener('click', function () {
+      runScenario('Analyze all breaking news and mass casualty events from the last 24 hours. Focus on events with Red Cross operational relevance: mass shootings, building collapses, explosions, industrial accidents, transportation disasters. For each event, assess the likely scale of impact, potential shelter/feeding needs, and recommended Red Cross response posture. If no breaking events exist, provide an all-clear assessment.', 'ask');
+    });
+
+    document.getElementById('btn-outlook').addEventListener('click', function () {
+      runScenario('Analyze the current storm outlook from SPC convective outlooks (tornado/severe risk), NHC tropical outlooks (hurricane/tropical storm activity), and WPC excessive rainfall outlooks (flash flood risk). What severe weather is developing or forecast in the next 1-3 days? Which regions should the Red Cross pre-position resources? Rank areas by risk level and provide specific preparedness recommendations.', 'ask');
+    });
+
     // --- Brief mode ---
     document.getElementById('btn-briefing').addEventListener('click', function () {
       runBriefing();
@@ -110,7 +143,7 @@
     });
 
     // --- Layer toggle chips ---
-    ['disasters', 'alerts', 'fires', 'quakes', 'radar', 'qpf', 'wwa', 'svi'].forEach(function (name) {
+    ['disasters', 'alerts', 'fires', 'quakes', 'radar', 'qpf', 'wwa', 'svi', 'spc', 'nhc', 'ero'].forEach(function (name) {
       var chip = document.getElementById('toggle-' + name);
       if (chip) {
         chip.addEventListener('click', function () {

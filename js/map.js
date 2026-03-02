@@ -134,7 +134,7 @@ ATLAS.map = (function () {
         wwaLayer = new MapImageLayer({
           url: 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer',
           title: 'Watches & Warnings',
-          visible: false,
+          visible: true,
           opacity: 0.5,
           sublayers: [{ id: 1 }]
         });

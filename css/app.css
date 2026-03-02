@@ -531,9 +531,27 @@ calcite-navigation-logo {
   transition: opacity 0.15s;
 }
 
+#layer-bar calcite-chip::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  margin-right: 4px;
+  vertical-align: middle;
+  transition: all 0.15s;
+}
+
 #layer-bar calcite-chip.active {
   --calcite-color-foreground-2: rgba(237, 27, 46, 0.15);
   color: var(--arc-red);
+}
+
+#layer-bar calcite-chip.active::before {
+  background: var(--arc-red);
+  border-color: var(--arc-red);
+  box-shadow: 0 0 4px rgba(237, 27, 46, 0.4);
 }
 
 /* --- Map Graphics Popup Override --- */

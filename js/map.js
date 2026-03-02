@@ -234,17 +234,21 @@ ATLAS.map = (function () {
       if (!coords) return;
 
       var color = disasterColors[d.type] || disasterColors.default;
+      var isFire = d.type === 'Fire';
+      var declType = d.declarationType === 'EM' ? 'Emergency' : 'Major Disaster';
+      var dateStr = d.declarationDate ? d.declarationDate.split('T')[0] : '';
 
       var graphic = new Graphic({
         geometry: {
           type: 'point',
-          longitude: coords.lon + (Math.random() - 0.5) * 2, // Slight offset to avoid stacking
+          longitude: coords.lon + (Math.random() - 0.5) * 2,
           latitude: coords.lat + (Math.random() - 0.5) * 1
         },
         symbol: {
           type: 'simple-marker',
+          style: isFire ? 'diamond' : 'circle',
           color: color,
-          size: 10,
+          size: isFire ? 14 : 10,
           outline: { color: [255, 255, 255, 180], width: 1.5 }
         },
         attributes: {
@@ -252,7 +256,9 @@ ATLAS.map = (function () {
           title: d.title,
           type: d.type,
           state: d.state,
-          date: d.declarationDate,
+          date: dateStr,
+          declType: declType,
+          programs: d.programsActive ? d.programsActive.join(', ') : '',
           source: 'FEMA',
           lat: coords.lat,
           lon: coords.lon
@@ -260,10 +266,12 @@ ATLAS.map = (function () {
         popupTemplate: {
           title: '<span style="font-family:\'Libre Baskerville\',serif;">{title}</span>',
           content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
+            '<div style="background:rgba(237,27,46,0.15);padding:6px 8px;border-radius:3px;margin-bottom:8px;font-size:12px;color:#ff6b7a;font-family:\'IBM Plex Mono\',monospace;letter-spacing:0.5px;">FEDERAL {declType} DECLARATION</div>' +
             '<b>Type:</b> {type}<br>' +
             '<b>State:</b> {state}<br>' +
             '<b>Declared:</b> {date}<br>' +
-            '<b>Disaster #:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{id}</span>' +
+            '<b>Programs:</b> {programs}<br>' +
+            '<b>Disaster #:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">DR-{id}</span>' +
             '</div>'
         }
       });

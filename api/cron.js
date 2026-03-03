@@ -142,6 +142,40 @@ async function fetchSPCOutlook() {
   }
 }
 
+async function fetchSPCIntensity() {
+  try {
+    const baseUrl = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer';
+    const sublayers = [
+      { id: 3, hazard: 'tornado', type: 'probabilistic' },
+      { id: 2, hazard: 'tornado', type: 'significant' },
+      { id: 5, hazard: 'hail', type: 'probabilistic' },
+      { id: 4, hazard: 'hail', type: 'significant' },
+      { id: 7, hazard: 'wind', type: 'probabilistic' },
+      { id: 6, hazard: 'wind', type: 'significant' }
+    ];
+
+    const results = await Promise.all(sublayers.map(async (sl) => {
+      try {
+        const url = `${baseUrl}/${sl.id}/query?where=1%3D1&outFields=LABEL,LABEL2,dn,idp_source&f=json&returnGeometry=false`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.features || []).map(f => ({
+          hazard: sl.hazard,
+          type: sl.type,
+          label: f.attributes.LABEL || f.attributes.LABEL2 || '',
+          category: f.attributes.dn
+        }));
+      } catch { return []; }
+    }));
+
+    return results.flat().filter(r => r.label && !r.label.includes('Less Than') && r.category > 0);
+  } catch (err) {
+    console.error('[CRON] SPC intensity error:', err.message);
+    return [];
+  }
+}
+
 async function fetchNHCOutlook() {
   try {
     const url = 'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer/0/query' +
@@ -191,12 +225,24 @@ module.exports = async function handler(req, res) {
     console.log('[CRON] Starting briefing generation...');
 
     // Fetch all data in parallel
-    const [disasters, alerts, fires, earthquakes, news, spc, nhc, ero] = await Promise.all([
+    const [disasters, alerts, fires, earthquakes, news, spc, spcIntensity, nhc, ero] = await Promise.all([
       fetchFEMA(), fetchNWS(), fetchNIFC(), fetchUSGS(),
-      fetchBreakingNews(), fetchSPCOutlook(), fetchNHCOutlook(), fetchEROOutlook()
+      fetchBreakingNews(), fetchSPCOutlook(), fetchSPCIntensity(), fetchNHCOutlook(), fetchEROOutlook()
     ]);
 
-    console.log(`[CRON] Data: ${disasters.length} disasters, ${alerts.length} alerts, ${fires.length} fires, ${earthquakes.length} quakes, ${news.length} news, ${spc.length} SPC, ${nhc.length} NHC, ${ero.length} ERO`);
+    // CIG reference model for AI briefing context
+    const spcCIG = [
+      { hazard: 'tornado', level: 'CIG1', description: 'EF2+ at 20% | EF3+ at 6% if tornado occurs' },
+      { hazard: 'tornado', level: 'CIG2', description: 'EF2+ at 30% | EF3+ at 12% if tornado occurs' },
+      { hazard: 'tornado', level: 'CIG3', description: 'EF2+ at 40% | EF3+ at 19% if tornado occurs' },
+      { hazard: 'wind', level: 'CIG1', description: 'Standard damaging wind gusts if wind event occurs' },
+      { hazard: 'wind', level: 'CIG2', description: 'Enhanced wind gusts (75mph+) if wind event occurs' },
+      { hazard: 'wind', level: 'CIG3', description: 'Extreme wind gusts (90mph+) if wind event occurs' },
+      { hazard: 'hail', level: 'CIG1', description: 'Large hail (1-2") if hail event occurs' },
+      { hazard: 'hail', level: 'CIG2', description: 'Very large hail (2"+) if hail event occurs' }
+    ];
+
+    console.log(`[CRON] Data: ${disasters.length} disasters, ${alerts.length} alerts, ${fires.length} fires, ${earthquakes.length} quakes, ${news.length} news, ${spc.length} SPC, ${spcIntensity.length} SPC intensity, ${nhc.length} NHC, ${ero.length} ERO`);
 
     // Deduplicate disasters
     const uniqueDisasters = {};
@@ -220,8 +266,17 @@ module.exports = async function handler(req, res) {
       dataContext += JSON.stringify(news);
     }
     if (spc.length > 0) {
-      dataContext += `\n\nSPC CONVECTIVE OUTLOOK (tornado/severe risk):\n`;
+      dataContext += `\n\nSPC CONVECTIVE OUTLOOK — "How likely?" (categorical risk level):\n`;
       dataContext += JSON.stringify(spc);
+    }
+    if (spcIntensity.length > 0) {
+      dataContext += `\n\nSPC HAZARD INTENSITY — "How bad could it be?" (tornado/wind/hail probabilities + significant markers):\n`;
+      dataContext += `Significant tornado = potential EF2+. Significant hail = potential 2"+. Significant wind = potential 75mph+ gusts.\n`;
+      dataContext += JSON.stringify(spcIntensity);
+    }
+    if (spc.length > 0 || spcIntensity.length > 0) {
+      dataContext += `\n\nSPC CONDITIONAL INTENSITY GUIDANCE (CIG) REFERENCE — Describes expected severity IF an event occurs:\n`;
+      dataContext += JSON.stringify(spcCIG);
     }
     if (nhc.length > 0) {
       dataContext += `\n\nNHC TROPICAL OUTLOOK:\n`;
@@ -237,11 +292,16 @@ module.exports = async function handler(req, res) {
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
-      system: `You are ATLAS, an AI disaster intelligence analyst for the American Red Cross. Generate a comprehensive executive briefing from the provided data.
+      system: `You are ATLAS, an AI disaster intelligence analyst. Generate a comprehensive executive briefing from the provided data for emergency management leadership.
+
+When SPC data is present, report BOTH dimensions:
+- "How likely?" — the categorical outlook risk level (Marginal through High)
+- "How bad could it be?" — hazard-specific probabilities and significant markers (EF2+ tornadoes, 2"+ hail, 75mph+ wind gusts)
+If significant markers are present for any hazard, call this out prominently — it means the most intense events are possible.
 
 RESPONSE FORMAT: Respond with valid JSON only — no markdown fences, no text outside JSON:
 {
-  "narrative": "3-4 paragraph executive briefing. Tone: Economist meets military intelligence. Cover: threat landscape, FEMA declarations, wildfires, severe weather, seismic activity, breaking events (if any), storm outlooks (if any), and operational posture. Use **bold** for key figures. 250-350 words.",
+  "narrative": "BLUF format — Bottom Line Up Front. First bullet is ALWAYS the overall assessment in 1-2 sentences: national threat level (LOW/MODERATE/HIGH/CRITICAL), the top CONUS (continental US) threat by name and location, and whether immediate emergency response action is needed. Alaska/maritime-only hazards do NOT lead — focus on population-impacting events in the lower 48 first. Remaining 5-8 bullets provide supporting detail: active threats, key numbers, regional hotspots. Each point on its own line starting with '- '. Use **bold** for key figures and locations. Concise, data-driven, actionable. No paragraphs.",
   "metrics": [{"label": "Short Label", "value": "42", "severity": "critical|high|moderate|low", "trend": "up|down|stable"}],
   "rankings": [{"rank": 1, "location": "Place", "state": "ST", "score": "8.5/10", "severity": "critical|high|moderate|low", "factors": "Brief risk factors", "lat": 29.7, "lon": -95.3}],
   "actions": [{"priority": "immediate|high|medium|low", "action": "What to do", "rationale": "Why"}],
@@ -300,6 +360,7 @@ Provide 4-6 metrics, 5-7 rankings, 4-6 actions. Use ONLY the provided data. Neve
         earthquakes: earthquakes.length,
         news: news.length,
         spc: spc.length,
+        spcIntensity: spcIntensity.length,
         nhc: nhc.length,
         ero: ero.length
       }

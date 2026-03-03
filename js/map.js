@@ -21,7 +21,10 @@ ATLAS.map = (function () {
   let spcLayer = null;
   let nhcLayer = null;
   let eroLayer = null;
+  let countySource = null;
   let pulseOverlays = [];
+  let _allFires = [];
+  let _hideContained = false;
 
   // State coordinates for zooming
   const stateCoords = {
@@ -52,6 +55,16 @@ ATLAS.map = (function () {
     WI: { lat: 43.8, lon: -88.8, zoom: 7 }, WY: { lat: 43.1, lon: -107.6, zoom: 7 },
     DC: { lat: 38.9, lon: -77.0, zoom: 11 }, PR: { lat: 18.2, lon: -66.5, zoom: 9 },
     GU: { lat: 13.4, lon: 144.8, zoom: 10 }
+  };
+
+  // SVG paths for descriptive icons (24x24 viewbox, centered on 12,12)
+  const iconPaths = {
+    // Shield — FEMA disasters
+    shield: 'M12 1 L3 5 L3 11 C3 17.5 7 22.5 12 24 C17 22.5 21 17.5 21 11 L21 5 Z',
+    // Flame — wildfires
+    flame: 'M12 0 C12 0 7 7 7 12 C7 14.8 8.5 17.2 10.5 18.5 C9.5 17 9 15.5 10 13.5 C11 11.5 12 10 12 10 C12 10 13 11.5 14 13.5 C15 15.5 14.5 17 13.5 18.5 C15.5 17.2 17 14.8 17 12 C17 7 12 0 12 0 Z',
+    // Seismic/bullseye — earthquakes (concentric target)
+    seismic: 'M12 0 A12 12 0 1 0 12 24 A12 12 0 1 0 12 0 Z M12 4 A8 8 0 1 1 12 20 A8 8 0 1 1 12 4 Z M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 Z'
   };
 
   // Severity colors for map symbols
@@ -134,18 +147,26 @@ ATLAS.map = (function () {
         wwaLayer = new MapImageLayer({
           url: 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer',
           title: 'Watches & Warnings',
-          visible: true,
+          visible: false,
           opacity: 0.5,
           sublayers: [{ id: 1 }]
         });
 
-        // SPC Convective Outlook — tornado/severe risk areas
+        // SPC Convective Outlook — categorical risk + hazard-specific probabilities
         spcLayer = new MapImageLayer({
           url: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer',
           title: 'SPC Convective Outlook',
           visible: false,
           opacity: 0.5,
-          sublayers: [{ id: 1 }] // Day 1 categorical
+          sublayers: [
+            { id: 7 },  // Day 1 Probabilistic Wind
+            { id: 6 },  // Day 1 Significant Wind
+            { id: 5 },  // Day 1 Probabilistic Hail
+            { id: 4 },  // Day 1 Significant Hail
+            { id: 3 },  // Day 1 Probabilistic Tornado
+            { id: 2 },  // Day 1 Significant Tornado
+            { id: 1 }   // Day 1 Categorical (on top)
+          ]
         });
 
         // NHC Tropical Weather — active storms, forecast cones
@@ -175,14 +196,23 @@ ATLAS.map = (function () {
           map: map,
           center: [-98.5, 39.8],
           zoom: 4,
-          ui: { components: ['zoom', 'attribution'] },
+          ui: { components: ['attribution'] },
           popup: { autoOpenEnabled: true, dockEnabled: false },
           constraints: { minZoom: 3 }
+        });
+
+        // Padding — sidebar is 44px collapsed + gap
+        view.ui.padding = { top: 8, left: 56, right: 15, bottom: 15 };
+
+        // County boundary source for FEMA choropleth (query-only, not added to map)
+        countySource = new FeatureLayer({
+          url: 'https://services.arcgis.com/QVENGdaPbd4LUkLV/ArcGIS/rest/services/USA_Counties/FeatureServer/0'
         });
 
         // Store module references for graphic creation
         ATLAS.map._Graphic = Graphic;
         ATLAS.map._Extent = Extent;
+        ATLAS.map._view = view;
 
         view.when(function () {
           // Remove loading scrim
@@ -191,13 +221,28 @@ ATLAS.map = (function () {
             scrim.loading = false;
             setTimeout(function () { scrim.style.display = 'none'; }, 300);
           }
+          // Build the map legend from config
+          buildLegend();
           console.log('[ATLAS] Map ready');
           resolve(view);
         });
 
-        // Click handler for disaster points
+        // Click handler for all data layers + ranking markers
         view.on('click', function (event) {
           view.hitTest(event).then(function (response) {
+            // Check ranking markers first (highlightLayer)
+            var rankHit = response.results.find(function (r) {
+              return r.graphic.layer === highlightLayer && r.graphic.attributes && r.graphic.popupTemplate;
+            });
+            if (rankHit) {
+              view.openPopup({
+                features: [rankHit.graphic],
+                location: event.mapPoint
+              });
+              return;
+            }
+
+            // Then check data layers
             var result = response.results.find(function (r) {
               return r.graphic.layer === disasterLayer || r.graphic.layer === alertLayer || r.graphic.layer === fireLayer || r.graphic.layer === earthquakeLayer;
             });
@@ -206,7 +251,6 @@ ATLAS.map = (function () {
               if (attrs.lat && attrs.lon) {
                 zoomTo(attrs.lat, attrs.lon, 8);
               }
-              // Dispatch event for app.js to handle
               document.dispatchEvent(new CustomEvent('atlas-feature-click', { detail: attrs }));
             }
           });
@@ -215,71 +259,97 @@ ATLAS.map = (function () {
     });
   }
 
-  // --- Add FEMA Disaster Graphics ---
-  function addDisasters(disasters) {
+  // --- Add FEMA Disaster Graphics (county choropleth) ---
+  async function addDisasters(disasters) {
     if (!disasterLayer) return;
     disasterLayer.removeAll();
 
     var Graphic = ATLAS.map._Graphic;
 
-    // Group by disaster number to get unique disasters, pick representative location
-    var unique = {};
+    // Group disasters by 5-digit FIPS (skip statewide "000" and invalid codes)
+    var byFips = {};
     disasters.forEach(function (d) {
-      if (!unique[d.id]) unique[d.id] = d;
+      if (!d.fips || d.fips.length !== 5 || d.fips.endsWith('000')) return;
+      if (!byFips[d.fips]) byFips[d.fips] = [];
+      byFips[d.fips].push(d);
     });
 
-    // We need geocoded locations — use state centroids as fallback
-    Object.values(unique).forEach(function (d) {
-      var coords = stateCoords[d.state] || stateCoords[d.stateCode];
-      if (!coords) return;
+    var fipsList = Object.keys(byFips);
+    if (fipsList.length === 0) {
+      console.log('[ATLAS] No county FIPS codes to map');
+      return;
+    }
 
-      var color = disasterColors[d.type] || disasterColors.default;
-      var isFire = d.type === 'Fire';
-      var declType = d.declarationType === 'EM' ? 'Emergency' : 'Major Disaster';
-      var dateStr = d.declarationDate ? d.declarationDate.split('T')[0] : '';
-
-      var graphic = new Graphic({
-        geometry: {
-          type: 'point',
-          longitude: coords.lon + (Math.random() - 0.5) * 2,
-          latitude: coords.lat + (Math.random() - 0.5) * 1
-        },
-        symbol: {
-          type: 'simple-marker',
-          style: isFire ? 'diamond' : 'circle',
-          color: color,
-          size: isFire ? 14 : 10,
-          outline: { color: [255, 255, 255, 180], width: 1.5 }
-        },
-        attributes: {
-          id: d.id,
-          title: d.title,
-          type: d.type,
-          state: d.state,
-          date: dateStr,
-          declType: declType,
-          programs: d.programsActive ? d.programsActive.join(', ') : '',
-          source: 'FEMA',
-          lat: coords.lat,
-          lon: coords.lon
-        },
-        popupTemplate: {
-          title: '<span style="font-family:\'Libre Baskerville\',serif;">{title}</span>',
-          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
-            '<div style="background:rgba(237,27,46,0.15);padding:6px 8px;border-radius:3px;margin-bottom:8px;font-size:12px;color:#ff6b7a;font-family:\'IBM Plex Mono\',monospace;letter-spacing:0.5px;">FEDERAL {declType} DECLARATION</div>' +
-            '<b>Type:</b> {type}<br>' +
-            '<b>State:</b> {state}<br>' +
-            '<b>Declared:</b> {date}<br>' +
-            '<b>Programs:</b> {programs}<br>' +
-            '<b>Disaster #:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">DR-{id}</span>' +
-            '</div>'
-        }
+    // Query county boundaries from Living Atlas
+    try {
+      var whereClause = "FIPS IN ('" + fipsList.join("','") + "')";
+      var results = await countySource.queryFeatures({
+        where: whereClause,
+        outFields: ['FIPS', 'NAME', 'STATE_NAME'],
+        returnGeometry: true
       });
 
-      disasterLayer.add(graphic);
-    });
+      results.features.forEach(function (feature) {
+        var fips = feature.attributes.FIPS;
+        var records = byFips[fips];
+        if (!records || records.length === 0) return;
 
-    console.log('[ATLAS] Added ' + Object.keys(unique).length + ' disaster graphics');
+        var primary = records[0];
+        var color = disasterColors[primary.type] || disasterColors.default;
+        var countyName = feature.attributes.NAME || '';
+        var stateName = feature.attributes.STATE_NAME || primary.state;
+
+        // Build popup rows for each declaration in this county
+        var rows = records.map(function (r, i) {
+          var bg = i % 2 === 0 ? 'background:rgba(255,255,255,0.04);' : '';
+          var declType = r.declarationType === 'EM' ? 'Emergency' : 'Major Disaster';
+          var dateStr = r.declarationDate ? r.declarationDate.split('T')[0] : '';
+          var programs = r.programsActive ? r.programsActive.join(', ') : '';
+          return '<tr style="' + bg + '"><td style="padding:6px 10px;color:#a09890;width:80px;">' + r.type + '</td>' +
+            '<td style="padding:6px 10px;">' + r.title +
+            '<div style="font-size:11px;color:#a09890;margin-top:2px;">DR-' + r.id + ' · ' + declType + ' · ' + dateStr + '</div>' +
+            (programs ? '<div style="font-size:11px;color:#a09890;">Programs: ' + programs + '</div>' : '') +
+            '</td></tr>';
+        });
+
+        var popupContent = '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+          '<div style="background:#8b1a1a;padding:6px 12px;margin:-12px -12px 12px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">' +
+          records.length + ' ACTIVE DECLARATION' + (records.length > 1 ? 'S' : '') + '</div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          rows.join('') +
+          '<tr><td colspan="2" style="padding:8px 10px;text-align:center;">' +
+          '<a href="https://www.fema.gov/disaster/' + primary.id + '" target="_blank" rel="noopener" style="color:#ff6b4a;text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">FEMA Disaster Page ↗</a>' +
+          '</td></tr></table></div>';
+
+        var graphic = new Graphic({
+          geometry: feature.geometry,
+          symbol: {
+            type: 'simple-fill',
+            color: [color[0], color[1], color[2], 100],
+            outline: { color: [color[0], color[1], color[2], 200], width: 1 }
+          },
+          attributes: {
+            id: primary.id,
+            title: primary.title,
+            type: primary.type,
+            state: primary.state,
+            county: countyName,
+            source: 'FEMA'
+          },
+          popupTemplate: {
+            title: '<span style="font-family:\'Libre Baskerville\',serif;">' + countyName + ', ' + stateName + '</span>',
+            content: popupContent
+          }
+        });
+
+        disasterLayer.add(graphic);
+      });
+
+      console.log('[ATLAS] Added ' + disasterLayer.graphics.length + ' disaster county polygons (' + fipsList.length + ' FIPS queried)');
+
+    } catch (err) {
+      console.error('[ATLAS] County query error:', err);
+    }
   }
 
   // --- Add NWS Alert Graphics ---
@@ -289,42 +359,47 @@ ATLAS.map = (function () {
 
     var Graphic = ATLAS.map._Graphic;
 
-    alerts.forEach(function (a) {
-      // Add polygon if geometry available
-      if (a.geometry && a.geometry.type === 'Polygon') {
-        var color = severityColors[a.severity] || severityColors.Unknown;
+    var popupTpl = {
+      title: '<span style="font-family:\'Libre Baskerville\',serif;">{event}</span>',
+      content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+        '<div style="background:{sevBg};padding:6px 12px;margin:-12px -12px 12px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">{severity}</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Areas</td><td style="padding:6px 10px;">{areas}</td></tr>' +
+        '<tr><td style="padding:6px 10px;color:#a09890;">Expires</td><td style="padding:6px 10px;">{expires}</td></tr>' +
+        '</table></div>'
+    };
 
-        var graphic = new Graphic({
-          geometry: {
-            type: 'polygon',
-            rings: a.geometry.coordinates
-          },
+    alerts.forEach(function (a) {
+      var color = severityColors[a.severity] || severityColors.Unknown;
+      var sevBg = '#6b7280';
+      if (a.severity === 'Extreme') sevBg = '#ef4444';
+      else if (a.severity === 'Severe') sevBg = '#f97316';
+      else if (a.severity === 'Moderate') sevBg = '#eab308';
+      else if (a.severity === 'Minor') sevBg = '#22c55e';
+
+      var attrs = {
+        event: a.event,
+        severity: a.severity,
+        headline: a.headline,
+        areas: a.areas,
+        expires: a.expires,
+        sevBg: sevBg,
+        source: 'NWS',
+        lat: a.lat,
+        lon: a.lon
+      };
+
+      if (a.geometry && a.geometry.type === 'Polygon') {
+        alertLayer.add(new Graphic({
+          geometry: { type: 'polygon', rings: a.geometry.coordinates },
           symbol: {
             type: 'simple-fill',
-            color: [color[0], color[1], color[2], 40],
-            outline: { color: [color[0], color[1], color[2], 180], width: 1.5 }
+            color: [color[0], color[1], color[2], 70],
+            outline: { color: [color[0], color[1], color[2], 220], width: 2 }
           },
-          attributes: {
-            event: a.event,
-            severity: a.severity,
-            headline: a.headline,
-            areas: a.areas,
-            expires: a.expires,
-            source: 'NWS',
-            lat: a.lat,
-            lon: a.lon
-          },
-          popupTemplate: {
-            title: '<span style="font-family:\'Libre Baskerville\',serif;">{event}</span>',
-            content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
-              '<b>Severity:</b> {severity}<br>' +
-              '<b>Areas:</b> {areas}<br>' +
-              '<b>Expires:</b> {expires}' +
-              '</div>'
-          }
-        });
-
-        alertLayer.add(graphic);
+          attributes: attrs,
+          popupTemplate: popupTpl
+        }));
       }
     });
 
@@ -334,9 +409,18 @@ ATLAS.map = (function () {
   // --- Add NIFC Wildfire Graphics ---
   function addFires(fires) {
     if (!fireLayer) return;
+    _allFires = fires;
+    _renderFires();
+  }
+
+  function _renderFires() {
+    if (!fireLayer) return;
     fireLayer.removeAll();
 
     var Graphic = ATLAS.map._Graphic;
+    var fires = _hideContained
+      ? _allFires.filter(function (f) { return f.percentContained == null || f.percentContained < 100; })
+      : _allFires;
 
     fires.forEach(function (f) {
       if (!f.lat || !f.lon) return;
@@ -357,6 +441,36 @@ ATLAS.map = (function () {
 
       var containedStr = f.percentContained != null ? f.percentContained + '%' : 'Unknown';
       var acresStr = f.acres ? f.acres.toLocaleString() : 'Unknown';
+      var containedPct = f.percentContained != null ? f.percentContained : 0;
+      var barColor = '#6b7280';
+      if (f.percentContained != null) {
+        if (f.percentContained >= 67) barColor = '#22c55e';
+        else if (f.percentContained >= 34) barColor = '#f97316';
+        else barColor = '#ef4444';
+      }
+
+      var discoveredStr = '';
+      if (f.discoveredDate) {
+        var dd = new Date(f.discoveredDate);
+        discoveredStr = dd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      var costStr = '';
+      if (f.costToDate && f.costToDate > 0) {
+        costStr = f.costToDate >= 1000000
+          ? '$' + (f.costToDate / 1000000).toFixed(1) + 'M'
+          : '$' + (f.costToDate / 1000).toFixed(0) + 'K';
+      }
+
+      var behaviorBg = '#3a3633';
+      var behaviorColor = '#a09890';
+      if (f.fireBehavior) {
+        var fb = f.fireBehavior.toLowerCase();
+        if (fb.indexOf('extreme') >= 0) { behaviorBg = '#ef4444'; behaviorColor = '#fff'; }
+        else if (fb.indexOf('active') >= 0) { behaviorBg = '#f97316'; behaviorColor = '#fff'; }
+        else if (fb.indexOf('moderate') >= 0) { behaviorBg = '#eab308'; behaviorColor = '#1a1816'; }
+        else if (fb.indexOf('minimal') >= 0) { behaviorBg = '#22c55e'; behaviorColor = '#fff'; }
+      }
 
       var graphic = new Graphic({
         geometry: {
@@ -366,10 +480,10 @@ ATLAS.map = (function () {
         },
         symbol: {
           type: 'simple-marker',
-          style: 'diamond',
+          path: iconPaths.flame,
           color: color,
           size: size,
-          outline: { color: [255, 255, 255, 200], width: 1.5 }
+          outline: { color: [255, 255, 255, 200], width: 1 }
         },
         attributes: {
           name: f.name,
@@ -377,27 +491,53 @@ ATLAS.map = (function () {
           county: f.county,
           acres: acresStr,
           contained: containedStr,
+          containedPct: containedPct,
+          barColor: barColor,
           personnel: f.personnel || 'N/A',
+          discovered: discoveredStr || 'Unknown',
+          behavior: f.fireBehavior || 'Unknown',
+          behaviorBg: behaviorBg,
+          behaviorColor: behaviorColor,
+          complexity: f.complexity || '',
+          cost: costStr || '',
+          gacc: f.gacc || '',
           source: 'NIFC',
           lat: f.lat,
           lon: f.lon
         },
         popupTemplate: {
           title: '<span style="font-family:\'Libre Baskerville\',serif;">{name}</span>',
-          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
-            '<b>Type:</b> Wildfire<br>' +
-            '<b>Location:</b> {county}, {state}<br>' +
-            '<b>Acres:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{acres}</span><br>' +
-            '<b>Contained:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{contained}</span><br>' +
-            '<b>Personnel:</b> {personnel}' +
-            '</div>'
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+            '<div style="background:#ed1b2e;padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">WILDFIRE</div>' +
+            '<div style="padding:14px 0 8px;text-align:center;">' +
+            '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:28px;color:#ff6b4a;font-weight:700;line-height:1;">{acres}</div>' +
+            '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Acres Burned</div></div>' +
+            '<div style="padding:0 0 10px;">' +
+            '<div style="font-size:11px;color:#a09890;margin-bottom:4px;">Containment: {contained}</div>' +
+            '<div style="background:#3a3633;border-radius:4px;height:8px;overflow:hidden;">' +
+            '<div style="background:{barColor};width:{containedPct}%;height:100%;border-radius:4px;"></div></div></div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Location</td><td style="padding:6px 10px;">{county}, {state}</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Discovered</td><td style="padding:6px 10px;">{discovered}</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Behavior</td><td style="padding:6px 10px;"><span style="display:inline-block;background:{behaviorBg};color:{behaviorColor};padding:2px 8px;border-radius:3px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">{behavior}</span></td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Personnel</td><td style="padding:6px 10px;">{personnel}</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">GACC</td><td style="padding:6px 10px;">{gacc}</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Complexity</td><td style="padding:6px 10px;">{complexity}</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Cost</td><td style="padding:6px 10px;font-family:\'IBM Plex Mono\',monospace;">{cost}</td></tr>' +
+            '</table></div>'
         }
       });
 
       fireLayer.add(graphic);
     });
 
-    console.log('[ATLAS] Added ' + fireLayer.graphics.length + ' fire graphics');
+    console.log('[ATLAS] Added ' + fireLayer.graphics.length + ' fire graphics' + (_hideContained ? ' (hiding contained)' : ''));
+  }
+
+  function setFireFilter(hideContained) {
+    _hideContained = hideContained;
+    _renderFires();
+    return _hideContained;
   }
 
   // --- Add USGS Earthquake Graphics ---
@@ -411,20 +551,25 @@ ATLAS.map = (function () {
       if (!q.lat || !q.lon) return;
 
       // Size by magnitude
-      var size = 8;
-      var color = [139, 92, 246]; // purple
+      var size = 14;
+      var color = [167, 139, 250]; // light purple
       if (q.magnitude >= 7.0) {
-        size = 24;
+        size = 30;
         color = [237, 27, 46]; // red
       } else if (q.magnitude >= 6.0) {
-        size = 18;
-        color = [200, 60, 180];
+        size = 24;
+        color = [220, 80, 200];
       } else if (q.magnitude >= 5.0) {
-        size = 13;
-        color = [160, 80, 220];
+        size = 18;
+        color = [167, 139, 250];
       }
 
       var timeStr = q.time ? new Date(q.time).toLocaleDateString() : 'Unknown';
+      var pagerBg = '#3a3633', pagerColor = '#a09890';
+      if (q.alert === 'green') { pagerBg = '#22c55e'; pagerColor = '#fff'; }
+      else if (q.alert === 'yellow') { pagerBg = '#eab308'; pagerColor = '#1a1816'; }
+      else if (q.alert === 'orange') { pagerBg = '#f97316'; pagerColor = '#fff'; }
+      else if (q.alert === 'red') { pagerBg = '#ef4444'; pagerColor = '#fff'; }
 
       var graphic = new Graphic({
         geometry: {
@@ -434,10 +579,10 @@ ATLAS.map = (function () {
         },
         symbol: {
           type: 'simple-marker',
-          style: 'cross',
+          path: iconPaths.seismic,
           color: color,
           size: size,
-          outline: { color: [255, 255, 255, 200], width: 2 }
+          outline: { color: [255, 255, 255, 200], width: 1 }
         },
         attributes: {
           magnitude: q.magnitude,
@@ -445,19 +590,33 @@ ATLAS.map = (function () {
           time: timeStr,
           depth: q.depth ? q.depth.toFixed(1) + ' km' : 'Unknown',
           alert: q.alert || 'None',
+          pagerBg: pagerBg,
+          pagerColor: pagerColor,
+          felt: q.felt ? q.felt.toLocaleString() + ' reports' : 'None',
+          tsunami: q.tsunami ? 'Yes' : 'No',
+          tsunamiBg: q.tsunami ? '#ef4444' : '#3a3633',
+          tsunamiColor: q.tsunami ? '#fff' : '#a09890',
+          usgsUrl: q.url || '',
           source: 'USGS',
           lat: q.lat,
           lon: q.lon
         },
         popupTemplate: {
           title: '<span style="font-family:\'Libre Baskerville\',serif;">M{magnitude} Earthquake</span>',
-          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;">' +
-            '<b>Location:</b> {place}<br>' +
-            '<b>Magnitude:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{magnitude}</span><br>' +
-            '<b>Date:</b> {time}<br>' +
-            '<b>Depth:</b> <span style="font-family:\'IBM Plex Mono\',monospace;">{depth}</span><br>' +
-            '<b>PAGER Alert:</b> {alert}' +
-            '</div>'
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+            '<div style="background:#7c3aed;padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">SEISMIC EVENT</div>' +
+            '<div style="padding:14px 0 8px;text-align:center;">' +
+            '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:32px;color:#a78bfa;font-weight:700;line-height:1;">M{magnitude}</div>' +
+            '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Magnitude</div></div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Location</td><td style="padding:6px 10px;">{place}</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Date</td><td style="padding:6px 10px;">{time}</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Depth</td><td style="padding:6px 10px;font-family:\'IBM Plex Mono\',monospace;">{depth}</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">PAGER</td><td style="padding:6px 10px;"><span style="display:inline-block;background:{pagerBg};color:{pagerColor};padding:2px 8px;border-radius:3px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;text-transform:uppercase;">{alert}</span></td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Felt</td><td style="padding:6px 10px;">{felt}</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Tsunami</td><td style="padding:6px 10px;"><span style="display:inline-block;background:{tsunamiBg};color:{tsunamiColor};padding:2px 8px;border-radius:3px;font-size:11px;font-family:\'IBM Plex Mono\',monospace;">{tsunami}</span></td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="{usgsUrl}" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">USGS Event Page ↗</a></td></tr>' +
+            '</table></div>'
         }
       });
 
@@ -497,38 +656,109 @@ ATLAS.map = (function () {
 
   function zoomToNation() {
     if (!view) return;
-    view.goTo({ center: [-98.5, 39.8], zoom: 4 }, { duration: 1500, easing: 'ease-in-out' });
+    var Extent = ATLAS.map._Extent;
+    view.goTo(new Extent({
+      xmin: -125, ymin: 24,
+      xmax: -66, ymax: 50,
+      spatialReference: { wkid: 4326 }
+    }), { duration: 1500, easing: 'ease-in-out' });
   }
 
-  // --- Highlight Locations ---
-  function highlightLocations(locations) {
+  // Zoom to extent covering CONUS + AK + PR/VI (not Guam — too far)
+  function zoomToQuakeExtent() {
+    if (!view) return;
+    var Extent = ATLAS.map._Extent;
+    view.goTo(new Extent({
+      xmin: -180, ymin: 15,   // SW: west of AK, south of PR
+      xmax: -64,  ymax: 72,   // NE: east of VI, north of AK
+      spatialReference: { wkid: 4326 }
+    }), { duration: 1500, easing: 'ease-in-out' });
+  }
+
+  // --- Numbered Ranking Markers ---
+  function showRankingMarkers(rankings) {
     if (!highlightLayer) return;
     highlightLayer.removeAll();
 
     var Graphic = ATLAS.map._Graphic;
 
-    locations.forEach(function (loc) {
-      if (!loc.lat || !loc.lon) return;
+    rankings.forEach(function (r) {
+      if (!r.lat || !r.lon) return;
 
-      // Outer ring (highlight)
+      var sevLabel = (r.severity || 'moderate').toUpperCase();
+      var sevBg = '#6b7280';
+      if (r.severity === 'critical') sevBg = '#ef4444';
+      else if (r.severity === 'high') sevBg = '#f97316';
+      else if (r.severity === 'moderate') sevBg = '#eab308';
+      else if (r.severity === 'low') sevBg = '#22c55e';
+
+      var popupContent = '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+        '<div style="background:' + sevBg + ';padding:6px 12px;margin:-12px -12px 12px;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">RISK RANK #' + r.rank + ' — ' + sevLabel + '</div>' +
+        '<div style="padding:8px 0;text-align:center;">' +
+        '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:32px;color:#ff6b4a;font-weight:700;line-height:1;">' + (r.score || '') + '</div>' +
+        '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Risk Score</div></div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Location</td><td style="padding:6px 10px;">' + (r.location || '') + ', ' + (r.state || '') + '</td></tr>' +
+        '<tr><td style="padding:6px 10px;color:#a09890;">Factors</td><td style="padding:6px 10px;">' + (r.factors || '') + '</td></tr>' +
+        '</table></div>';
+
+      var popupTemplate = {
+        title: '<span style="font-family:\'Libre Baskerville\',serif;">#' + r.rank + ' ' + (r.location || '') + '</span>',
+        content: popupContent
+      };
+
+      // Red circle background — carries the popup
       highlightLayer.add(new Graphic({
-        geometry: { type: 'point', longitude: loc.lon, latitude: loc.lat },
+        geometry: { type: 'point', longitude: r.lon, latitude: r.lat },
         symbol: {
           type: 'simple-marker',
-          color: [0, 0, 0, 0],
-          size: 28,
-          outline: { color: [237, 27, 46, 200], width: 3 }
-        }
+          color: [237, 27, 46],
+          size: 24,
+          outline: { color: [255, 255, 255], width: 2 }
+        },
+        attributes: {
+          rank: r.rank,
+          location: r.location,
+          state: r.state,
+          score: r.score,
+          severity: r.severity,
+          factors: r.factors,
+          source: 'ranking',
+          lat: r.lat,
+          lon: r.lon
+        },
+        popupTemplate: popupTemplate
       }));
 
-      // Inner dot
+      // White number label
+      highlightLayer.add(new Graphic({
+        geometry: { type: 'point', longitude: r.lon, latitude: r.lat },
+        symbol: {
+          type: 'text',
+          text: String(r.rank),
+          color: [255, 255, 255],
+          font: { size: 11, weight: 'bold', family: 'Source Sans Pro' },
+          yoffset: 0
+        }
+      }));
+    });
+  }
+
+  // Legacy — single location highlight (for ranking click)
+  function highlightLocations(locations) {
+    if (!highlightLayer) return;
+    highlightLayer.removeAll();
+
+    var Graphic = ATLAS.map._Graphic;
+    locations.forEach(function (loc) {
+      if (!loc.lat || !loc.lon) return;
       highlightLayer.add(new Graphic({
         geometry: { type: 'point', longitude: loc.lon, latitude: loc.lat },
         symbol: {
           type: 'simple-marker',
           color: [237, 27, 46],
-          size: 8,
-          outline: { color: [255, 255, 255], width: 2 }
+          size: 24,
+          outline: { color: [255, 255, 255], width: 2.5 }
         }
       }));
     });
@@ -562,6 +792,7 @@ ATLAS.map = (function () {
     if (layer) {
       layer.visible = !layer.visible;
       console.log('[ATLAS] ' + name + ' layer: ' + (layer.visible ? 'ON' : 'OFF'));
+      updateLegendVisibility();
       return layer.visible;
     }
     return false;
@@ -573,6 +804,50 @@ ATLAS.map = (function () {
     return layer ? layer.visible : false;
   }
 
+  // --- Legend config (single source of truth for icons + colors + labels) ---
+  const legendConfig = [
+    { layer: 'disasters', label: 'FEMA Disasters', path: iconPaths.shield, color: '#3b82f6' },
+    { layer: 'fires', label: 'Active Wildfires', path: iconPaths.flame, color: '#f97316' },
+    { layer: 'quakes', label: 'Earthquakes', path: iconPaths.seismic, color: '#a78bfa' },
+    { layer: 'wwa', label: 'Watches/Warnings', color: '#ef4444', shape: 'rect' }
+  ];
+
+  function buildLegend() {
+    var container = document.getElementById('legend-items');
+    if (!container) return;
+    container.innerHTML = '';
+
+    legendConfig.forEach(function (item) {
+      var div = document.createElement('div');
+      div.className = 'legend-item';
+      div.dataset.layer = item.layer;
+
+      var svg;
+      if (item.path) {
+        svg = '<svg width="16" height="16" viewBox="0 0 24 24"><path d="' + item.path + '" fill="' + item.color + '" stroke="#fff" stroke-width="1"/></svg>';
+      } else {
+        svg = '<svg width="16" height="16" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="3" fill="' + item.color + '" stroke="#fff" stroke-width="1" opacity="0.6"/></svg>';
+      }
+
+      div.innerHTML = svg + '<span>' + item.label + '</span>';
+      container.appendChild(div);
+    });
+  }
+
+  function updateLegendVisibility() {
+    var items = document.querySelectorAll('.legend-item');
+    items.forEach(function (item) {
+      var layerName = item.dataset.layer;
+      item.classList.toggle('hidden', !isLayerVisible(layerName));
+    });
+  }
+
+  // --- Screenshot for PDF export ---
+  function takeScreenshot() {
+    if (!view) return Promise.resolve(null);
+    return view.takeScreenshot({ format: 'png', quality: 90 });
+  }
+
   // --- Execute AI Map Commands ---
   function executeMapCommands(commands) {
     if (!commands || !Array.isArray(commands)) return;
@@ -582,10 +857,20 @@ ATLAS.map = (function () {
         zoomTo(cmd.target.lat, cmd.target.lon, cmd.target.zoom);
       } else if (cmd.type === 'highlight' && cmd.target) {
         highlightLocations([cmd.target]);
-      } else if (cmd.type === 'overlay') {
-        showSVI(true);
       }
     });
+  }
+
+  function setViewPadding(padding) {
+    if (view) view.padding = padding;
+  }
+
+  function zoomIn() {
+    if (view) view.zoom += 1;
+  }
+
+  function zoomOut() {
+    if (view) view.zoom -= 1;
   }
 
   return {
@@ -598,12 +883,20 @@ ATLAS.map = (function () {
     zoomToState: zoomToState,
     zoomToRegion: zoomToRegion,
     zoomToNation: zoomToNation,
+    zoomToQuakeExtent: zoomToQuakeExtent,
+    setViewPadding: setViewPadding,
+    zoomIn: zoomIn,
+    zoomOut: zoomOut,
     highlightLocations: highlightLocations,
+    showRankingMarkers: showRankingMarkers,
     clearHighlights: clearHighlights,
     showSVI: showSVI,
     toggleLayer: toggleLayer,
     isLayerVisible: isLayerVisible,
     executeMapCommands: executeMapCommands,
+    setFireFilter: setFireFilter,
+    takeScreenshot: takeScreenshot,
+    updateLegendVisibility: updateLegendVisibility,
     stateCoords: stateCoords
   };
 

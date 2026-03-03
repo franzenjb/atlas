@@ -1,7 +1,7 @@
 const Anthropic = require('@anthropic-ai/sdk');
 
-const SYSTEM_PROMPT = `You are ATLAS, an AI disaster intelligence analyst for the American Red Cross.
-You analyze real-time disaster data and produce executive-grade intelligence products.
+const SYSTEM_PROMPT = `You are ATLAS, an AI disaster intelligence analyst.
+You analyze real-time disaster data and produce executive-grade intelligence products for emergency management leadership.
 
 DATA SOURCES AVAILABLE:
 1. FEMA Active Disaster Declarations — federal disaster declarations with type, state, date, programs activated
@@ -10,12 +10,14 @@ DATA SOURCES AVAILABLE:
 4. USGS Earthquakes — M4.5+ earthquakes from the last 30 days with magnitude, location, depth, PAGER alert level
 5. Breaking News — mass casualty events, building collapses, explosions, industrial accidents, transportation disasters from last 24 hours
 6. SPC Convective Outlook — Day 1-3 tornado/severe thunderstorm risk areas (MARGINAL to HIGH)
-7. NHC Tropical Outlook — active tropical storms/hurricanes with wind speed, track, and forecast cones
-8. WPC Excessive Rainfall Outlook — Day 1-3 flash flood risk areas
+7. SPC Hazard Intensity — Tornado/wind/hail probabilities + significant markers (EF2+ tornadoes, 2"+ hail, 75mph+ wind)
+8. SPC Conditional Intensity Guidance (CIG) — Expected severity IF an event occurs (CIG1→CIG3 increasing intensity)
+9. NHC Tropical Outlook — active tropical storms/hurricanes with wind speed, track, and forecast cones
+10. WPC Excessive Rainfall Outlook — Day 1-3 flash flood risk areas
 
 RESPONSE FORMAT: You MUST respond with valid JSON matching this exact structure:
 {
-  "narrative": "2-3 paragraph executive summary. Use **bold** for emphasis. Mention specific locations, numbers, and risk factors. Tone: Economist magazine meets military intelligence briefing — concise, authoritative, actionable.",
+  "narrative": "BLUF format — Bottom Line Up Front. First bullet is ALWAYS the overall assessment in 1-2 sentences: national threat level (LOW/MODERATE/HIGH/CRITICAL), the top CONUS (continental US) threat by name and location, and whether immediate emergency response action is needed. Alaska/maritime-only hazards do NOT lead — focus on population-impacting events in the lower 48 first. Remaining 5-8 bullets provide supporting detail: active threats, key numbers, regional hotspots. Each point on its own line starting with '- '. Use **bold** for key figures and locations. Concise, data-driven, actionable. No paragraphs.",
   "metrics": [
     {"label": "Short Label", "value": "42", "severity": "critical|high|moderate|low", "trend": "up|down|stable"}
   ],
@@ -56,13 +58,16 @@ EARTHQUAKE ANALYSIS:
 - Cross-reference earthquake locations with population density and known fault zones.
 
 BREAKING NEWS ANALYSIS:
-- If breaking news data is provided, assess each event for Red Cross operational relevance.
+- If breaking news data is provided, assess each event for emergency management operational relevance.
 - Mass casualty events, building collapses, and transportation disasters may require immediate shelter/feeding response.
 - Integrate breaking events into the narrative and rankings where they represent significant threats.
 - If no breaking news is provided, do not mention it.
 
 STORM OUTLOOK ANALYSIS:
 - If SPC Convective Outlook data is provided, incorporate tornado/severe weather risk into threat assessment.
+- When SPC data is present, report BOTH dimensions: "How likely?" (categorical risk) AND "How bad could it be?" (hazard intensity/CIG).
+- If SPC CIG data is present, reference the conditional intensity levels (CIG1-3 for tornado/wind, CIG1-2 for hail). Higher CIG = more intense events expected IF they occur.
+- If significant markers are present for any hazard, call this out — it means the most intense events (EF2+ tornadoes, 2"+ hail, 75mph+ gusts) are possible.
 - If NHC Tropical data is provided, factor tropical systems into the narrative with wind speed and track.
 - If WPC Excessive Rainfall data is provided, include flash flood risk areas.
 - Risk levels: MARGINAL < SLIGHT < ENHANCED < MODERATE < HIGH. MODERATE and HIGH are rare and critical.
@@ -117,8 +122,17 @@ module.exports = async function handler(req, res) {
         dataContext += JSON.stringify(context.breakingNews.slice(0, 10), null, 0);
       }
       if (context.spcOutlook && context.spcOutlook.length > 0) {
-        dataContext += `\n\nSPC CONVECTIVE OUTLOOK (tornado/severe risk):\n`;
+        dataContext += `\n\nSPC CONVECTIVE OUTLOOK — "How likely?" (categorical risk level):\n`;
         dataContext += JSON.stringify(context.spcOutlook, null, 0);
+      }
+      if (context.spcIntensity && context.spcIntensity.length > 0) {
+        dataContext += `\n\nSPC HAZARD INTENSITY — "How bad could it be?" (tornado/wind/hail probabilities + significant markers):\n`;
+        dataContext += `Significant tornado = potential EF2+. Significant hail = potential 2"+. Significant wind = potential 75mph+ gusts.\n`;
+        dataContext += JSON.stringify(context.spcIntensity, null, 0);
+      }
+      if (context.spcCIG && context.spcCIG.length > 0) {
+        dataContext += `\n\nSPC CONDITIONAL INTENSITY GUIDANCE (CIG) — Expected severity IF an event occurs:\n`;
+        dataContext += JSON.stringify(context.spcCIG, null, 0);
       }
       if (context.nhcOutlook && context.nhcOutlook.length > 0) {
         dataContext += `\n\nNHC TROPICAL OUTLOOK:\n`;

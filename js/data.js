@@ -14,6 +14,8 @@ ATLAS.data = (function () {
     earthquakes: [],
     breakingNews: [],
     spcOutlook: [],
+    spcIntensity: [],
+    spcCIG: [],
     nhcOutlook: [],
     eroOutlook: [],
     loading: false,
@@ -46,6 +48,7 @@ ATLAS.data = (function () {
         state: d.state,
         stateCode: d.stateCode || d.state,
         county: d.designatedArea,
+        fips: (d.fipsStateCode || '').padStart(2, '0') + (d.fipsCountyCode || '').padStart(3, '0'),
         declarationDate: d.declarationDate,
         incidentBegin: d.incidentBeginDate,
         incidentEnd: d.incidentEndDate,
@@ -128,7 +131,7 @@ ATLAS.data = (function () {
   async function fetchFires() {
     try {
       const url = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query' +
-        '?where=IncidentTypeCategory%3D%27WF%27%20AND%20ActiveFireCandidate%3D1' +
+        '?where=IncidentTypeCategory%3D%27WF%27%20AND%20ActiveFireCandidate%3D1%20AND%20IncidentSize%3E%3D10' +
         '&outFields=IncidentName,POOState,POOCounty,POOCity,IncidentSize,PercentContained,' +
         'FireDiscoveryDateTime,FireCause,IncidentComplexityLevel,TotalIncidentPersonnel,' +
         'EstimatedCostToDate,FireBehaviorGeneral,GACC,IrwinID,ModifiedOnDateTime_dt' +
@@ -205,9 +208,19 @@ ATLAS.data = (function () {
           lon: coords[0],
           depth: coords[2]
         };
+      }).filter(function (q) {
+        // US only: CONUS + HI + Caribbean territories (M4.5+), Alaska requires M5.0+
+        // Pacific territories (Guam, CNMI, American Samoa) have positive longitudes
+        var isAlaska = q.lat >= 51 && q.lat <= 72 && q.lon >= -180 && q.lon <= -129;
+        var isUSMain = q.lat >= 17 && q.lat <= 72 && q.lon >= -180 && q.lon <= -64;
+        var isGuamCNMI = q.lat >= 10 && q.lat <= 21 && q.lon >= 140 && q.lon <= 150;
+        var isAmSamoa = q.lat >= -16 && q.lat <= -11 && q.lon >= -172 && q.lon <= -168;
+        if (!isUSMain && !isGuamCNMI && !isAmSamoa) return false;
+        if (isAlaska && q.magnitude < 5.0) return false;
+        return true;
       }).sort(function (a, b) { return b.magnitude - a.magnitude; });
 
-      console.log('[ATLAS] Loaded ' + state.earthquakes.length + ' earthquakes (M4.5+ last 30d)');
+      console.log('[ATLAS] Loaded ' + state.earthquakes.length + ' US earthquakes (CONUS M4.5+, AK M5.0+)');
       return state.earthquakes;
 
     } catch (err) {
@@ -254,6 +267,94 @@ ATLAS.data = (function () {
       console.error('[ATLAS] SPC fetch error:', err);
       return [];
     }
+  }
+
+  // --- SPC Hazard-Specific Intensity (Tornado/Wind/Hail probabilities + significant markers) ---
+  async function fetchSPCIntensity() {
+    try {
+      var baseUrl = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer';
+      var sublayers = [
+        { id: 3, hazard: 'tornado', type: 'probabilistic' },
+        { id: 2, hazard: 'tornado', type: 'significant' },
+        { id: 5, hazard: 'hail', type: 'probabilistic' },
+        { id: 4, hazard: 'hail', type: 'significant' },
+        { id: 7, hazard: 'wind', type: 'probabilistic' },
+        { id: 6, hazard: 'wind', type: 'significant' }
+      ];
+
+      var results = await Promise.all(sublayers.map(function (sl) {
+        var url = baseUrl + '/' + sl.id + '/query?where=1%3D1&outFields=LABEL,LABEL2,dn,idp_source&f=json&returnGeometry=false';
+        return fetch(url).then(function (r) { return r.ok ? r.json() : { features: [] }; })
+          .then(function (data) {
+            return (data.features || []).map(function (f) {
+              return {
+                hazard: sl.hazard,
+                type: sl.type,
+                label: f.attributes.LABEL || f.attributes.LABEL2 || '',
+                category: f.attributes.dn,
+                source: 'SPC Day 1 ' + sl.type.charAt(0).toUpperCase() + sl.type.slice(1) + ' ' + sl.hazard.charAt(0).toUpperCase() + sl.hazard.slice(1)
+              };
+            });
+          })
+          .catch(function () { return []; });
+      }));
+
+      state.spcIntensity = results.flat().filter(function (r) {
+        // Filter out empty/no-risk records
+        return r.label && r.label.indexOf('Less Than') === -1 && r.category > 0;
+      });
+
+      console.log('[ATLAS] Loaded ' + state.spcIntensity.length + ' SPC intensity records');
+      return state.spcIntensity;
+
+    } catch (err) {
+      console.error('[ATLAS] SPC intensity fetch error:', err);
+      return [];
+    }
+  }
+
+  // --- SPC Conditional Intensity Guidance (CIG) ---
+  // Checks MapServer for new CIG sublayers (IDs 26+). Falls back to synthetic test data.
+  // Remove synthetic fallback once real CIG sublayers appear on MapServer.
+  async function fetchSPCCIG() {
+    try {
+      // Check if MapServer has new CIG sublayers
+      var msUrl = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer?f=json';
+      var msRes = await fetch(msUrl);
+      if (msRes.ok) {
+        var msData = await msRes.json();
+        var layers = msData.layers || [];
+        var cigLayers = layers.filter(function (l) {
+          return l.name && (l.name.toLowerCase().indexOf('intensity') >= 0 || l.name.toLowerCase().indexOf('conditional') >= 0 || l.name.toLowerCase().indexOf('cig') >= 0);
+        });
+        if (cigLayers.length > 0) {
+          console.log('[ATLAS] Found CIG sublayers:', cigLayers.map(function (l) { return l.id + ':' + l.name; }));
+          // TODO: Query these sublayers for real CIG data
+          // For now, log discovery and continue to synthetic
+        }
+      }
+    } catch (err) {
+      // MapServer check failed, not critical
+    }
+
+    // Synthetic CIG data — models what real CIG output will look like
+    // Based on SPC experimental page: https://www.spc.noaa.gov/exper/conditional-intensity-information/
+    state.spcCIG = [
+      // Tornado: 3 levels — EF2+ probability increases with level
+      { hazard: 'tornado', level: 'CIG1', description: 'EF2+ at 20% | EF3+ at 6% if tornado occurs', severity: 'moderate', synthetic: true },
+      { hazard: 'tornado', level: 'CIG2', description: 'EF2+ at 30% | EF3+ at 12% if tornado occurs', severity: 'high', synthetic: true },
+      { hazard: 'tornado', level: 'CIG3', description: 'EF2+ at 40% | EF3+ at 19% if tornado occurs', severity: 'critical', synthetic: true },
+      // Wind: 3 levels — gust strength increases with level
+      { hazard: 'wind', level: 'CIG1', description: 'Standard damaging wind gusts if wind event occurs', severity: 'moderate', synthetic: true },
+      { hazard: 'wind', level: 'CIG2', description: 'Enhanced wind gusts (75mph+) if wind event occurs', severity: 'high', synthetic: true },
+      { hazard: 'wind', level: 'CIG3', description: 'Extreme wind gusts (90mph+) if wind event occurs', severity: 'critical', synthetic: true },
+      // Hail: 2 levels — size increases with level
+      { hazard: 'hail', level: 'CIG1', description: 'Large hail (1-2") if hail event occurs', severity: 'moderate', synthetic: true },
+      { hazard: 'hail', level: 'CIG2', description: 'Very large hail (2"+) if hail event occurs', severity: 'high', synthetic: true }
+    ];
+
+    console.log('[ATLAS] CIG data: synthetic model (8 records) — real CIG sublayers not yet on MapServer');
+    return state.spcCIG;
   }
 
   // --- NHC Tropical Outlook ---
@@ -324,6 +425,8 @@ ATLAS.data = (function () {
         fetchEarthquakes(),
         fetchBreakingNews(),
         fetchSPCOutlook(),
+        fetchSPCIntensity(),
+        fetchSPCCIG(),
         fetchNHCOutlook(),
         fetchEROOutlook()
       ]);
@@ -353,20 +456,33 @@ ATLAS.data = (function () {
       disasterTypes[d.type] = (disasterTypes[d.type] || 0) + 1;
     });
 
+    // Unique disaster incidents (vs per-county declarations)
+    const uniqueDisasterIds = new Set(state.disasters.map(d => d.id));
+
     const alertsBySeverity = {};
     state.alerts.forEach(a => {
       alertsBySeverity[a.severity] = (alertsBySeverity[a.severity] || 0) + 1;
     });
 
+    // Active fires = not 100% contained
+    const activeFires = state.fires.filter(f => f.percentContained == null || f.percentContained < 100);
     const totalFireAcres = state.fires.reduce((s, f) => s + (f.acres || 0), 0);
+
+    // US-area earthquakes (CONUS + AK + HI + territories)
+    const usEarthquakes = state.earthquakes.filter(q =>
+      q.lat >= 17 && q.lat <= 72 && q.lon >= -180 && q.lon <= -64
+    );
 
     return {
       totalDisasters: state.disasters.length,
+      uniqueDisasters: uniqueDisasterIds.size,
       statesAffected: Object.keys(disastersByState).length,
       totalAlerts: state.alerts.length,
       totalFires: state.fires.length,
+      activeFires: activeFires.length,
       totalFireAcres: totalFireAcres,
       totalEarthquakes: state.earthquakes.length,
+      usEarthquakes: usEarthquakes.length,
       disastersByState,
       disasterTypes,
       alertsBySeverity,
@@ -407,6 +523,8 @@ ATLAS.data = (function () {
       earthquakes: state.earthquakes.slice(0, 20),
       breakingNews: state.breakingNews.slice(0, 10),
       spcOutlook: state.spcOutlook,
+      spcIntensity: state.spcIntensity,
+      spcCIG: state.spcCIG,
       nhcOutlook: state.nhcOutlook,
       eroOutlook: state.eroOutlook,
       region: region || 'National',
@@ -442,6 +560,8 @@ ATLAS.data = (function () {
     fetchEarthquakes,
     fetchBreakingNews,
     fetchSPCOutlook,
+    fetchSPCIntensity,
+    fetchSPCCIG,
     fetchNHCOutlook,
     fetchEROOutlook
   };

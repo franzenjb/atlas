@@ -34,29 +34,22 @@ ATLAS.ai = (function () {
   function renderResponse(data) {
     var container = document.getElementById('ai-response');
     var narrativeEl = document.getElementById('response-narrative');
-    var metricsEl = document.getElementById('response-metrics');
     var rankingsEl = document.getElementById('response-rankings');
     var actionsEl = document.getElementById('response-actions');
 
     // Clear previous
     narrativeEl.innerHTML = '';
-    metricsEl.innerHTML = '';
     rankingsEl.innerHTML = '';
     actionsEl.innerHTML = '';
 
-    // Render narrative
-    if (data.narrative) {
-      renderNarrative(data.narrative, narrativeEl);
-    }
-
-    // Render metrics
-    if (data.metrics && data.metrics.length > 0) {
-      renderMetrics(data.metrics, metricsEl);
-    }
-
-    // Render rankings
+    // Render rankings first (top of panel, clickable)
     if (data.rankings && data.rankings.length > 0) {
       renderRankings(data.rankings, rankingsEl);
+    }
+
+    // Render narrative (Intelligence Assessment)
+    if (data.narrative) {
+      renderNarrative(data.narrative, narrativeEl);
     }
 
     // Render actions
@@ -69,12 +62,9 @@ ATLAS.ai = (function () {
       ATLAS.map.executeMapCommands(data.mapCommands);
     }
 
-    // Highlight ranked locations on map
+    // Show numbered markers on map for rankings
     if (data.rankings && data.rankings.length > 0) {
-      var locs = data.rankings
-        .filter(function (r) { return r.lat && r.lon; })
-        .map(function (r) { return { lat: r.lat, lon: r.lon }; });
-      ATLAS.map.highlightLocations(locs);
+      ATLAS.map.showRankingMarkers(data.rankings);
     }
 
     // Show response, hide welcome/loading
@@ -89,9 +79,8 @@ ATLAS.ai = (function () {
   // --- Staggered Reveal Animation ---
   function animateResponse() {
     var items = document.querySelectorAll(
-      '#response-narrative .intel-section > *, ' +
-      '#response-metrics .intel-section > *, #response-metrics .stat-card, ' +
       '#response-rankings .intel-section > *, #response-rankings .ranking-item, ' +
+      '#response-narrative .intel-section > *, ' +
       '#response-actions .intel-section > *, #response-actions .action-item'
     );
 
@@ -112,20 +101,39 @@ ATLAS.ai = (function () {
       return '<span class="location-link" data-lat="' + lat + '" data-lon="' + lon + '">' + name + '</span>';
     });
 
-    // Convert **bold** to <strong> and split paragraphs
-    var formatted = processed
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .split('\n\n')
-      .filter(function (p) { return p.trim(); })
-      .map(function (p) { return '<p class="narrative-text">' + p.trim() + '</p>'; })
-      .join('');
+    // Convert **bold** to <strong>
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
-    // If it's a single block without double-newlines, just wrap it
-    if (!formatted) {
-      formatted = '<p class="narrative-text">' + processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') + '</p>';
+    // Check if content has bullet points
+    var lines = processed.split('\n').filter(function (l) { return l.trim(); });
+    var hasBullets = lines.some(function (l) { return l.trim().match(/^[-•]\s/); });
+
+    if (hasBullets) {
+      var inList = false;
+      lines.forEach(function (line) {
+        var trimmed = line.trim();
+        if (trimmed.match(/^[-•]\s/)) {
+          if (!inList) { html += '<ul class="narrative-bullets">'; inList = true; }
+          html += '<li class="narrative-bullet">' + trimmed.replace(/^[-•]\s+/, '') + '</li>';
+        } else {
+          if (inList) { html += '</ul>'; inList = false; }
+          html += '<p class="narrative-text">' + trimmed + '</p>';
+        }
+      });
+      if (inList) html += '</ul>';
+    } else {
+      // Paragraph mode (fallback for non-bullet responses)
+      var formatted = processed
+        .split('\n\n')
+        .filter(function (p) { return p.trim(); })
+        .map(function (p) { return '<p class="narrative-text">' + p.trim() + '</p>'; })
+        .join('');
+      if (!formatted) {
+        formatted = '<p class="narrative-text">' + processed + '</p>';
+      }
+      html += formatted;
     }
 
-    html += formatted;
     html += '</div>';
     el.innerHTML = html;
 
@@ -197,7 +205,6 @@ ATLAS.ai = (function () {
         var state = item.dataset.state;
         if (lat && lon) {
           ATLAS.map.zoomTo(lat, lon, 7);
-          ATLAS.map.showSVI(true);
         } else if (state) {
           ATLAS.map.zoomToState(state);
         }
@@ -245,8 +252,93 @@ ATLAS.ai = (function () {
   function showError(message) {
     hideLoading();
     var narrativeEl = document.getElementById('response-narrative');
-    narrativeEl.innerHTML = '<div class="intel-section"><calcite-notice kind="danger" open><div slot="title">Analysis Error</div><div slot="message">' + escapeHtml(message) + '</div></calcite-notice></div>';
+    narrativeEl.innerHTML = '<div class="intel-section"><div class="error-banner"><div class="error-title">Analysis Error</div><div class="error-message">' + escapeHtml(message) + '</div></div></div>';
     document.getElementById('ai-response').hidden = false;
+  }
+
+  // --- Export PDF ---
+  async function exportPDF() {
+    // Capture map screenshot
+    var screenshot = await ATLAS.map.takeScreenshot();
+    var mapImg = screenshot ? screenshot.dataUrl : '';
+
+    // Grab rendered intel content
+    var rankingsHtml = document.getElementById('response-rankings').innerHTML;
+    var narrativeHtml = document.getElementById('response-narrative').innerHTML;
+    var actionsHtml = document.getElementById('response-actions').innerHTML;
+
+    var now = new Date();
+    var dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    var timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    // Build print document
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+      '<title>ATLAS Intelligence Briefing — ' + dateStr + '</title>' +
+      '<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Source+Sans+Pro:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">' +
+      '<style>' +
+      '*, *::before, *::after { box-sizing: border-box; }' +
+      'body { font-family: "Source Sans Pro", sans-serif; color: #1a1816; margin: 0; padding: 40px 50px; line-height: 1.5; }' +
+      '.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }' +
+      '.header h1 { font-family: "Libre Baskerville", serif; font-size: 22px; margin: 0; }' +
+      '.header .date { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #666; text-align: right; }' +
+      '.red-rule { width: 50px; height: 3px; background: #ED1B2E; margin-bottom: 20px; }' +
+      '.map-container { margin-bottom: 24px; }' +
+      '.map-container img { width: 100%; border: 1px solid #ddd; border-radius: 4px; }' +
+      '.intel-section { margin-bottom: 20px; }' +
+      '.intel-section + .intel-section { padding-top: 16px; border-top: 1px solid #e5e5e5; }' +
+      '.section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }' +
+      '.section-header .red-rule { width: 30px; height: 2px; margin-bottom: 0; }' +
+      '.section-header h4 { font-family: "Libre Baskerville", serif; font-size: 14px; margin: 0; }' +
+      '.dragon-headline { font-family: "Libre Baskerville", serif; font-size: 16px; margin: 0 0 10px; }' +
+      '.narrative-text { font-size: 13px; line-height: 1.6; margin: 0 0 8px; }' +
+      '.narrative-bullets { padding: 0; margin: 0 0 10px; list-style: none; }' +
+      '.narrative-bullet { font-size: 13px; line-height: 1.5; padding: 3px 0 3px 14px; position: relative; border-bottom: 1px solid #f0f0f0; }' +
+      '.narrative-bullet::before { content: ""; position: absolute; left: 0; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: #ED1B2E; }' +
+      '.ranking-list { list-style: none; padding: 0; margin: 0; }' +
+      '.ranking-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e5e5; }' +
+      '.ranking-item:last-child { border-bottom: none; }' +
+      '.rank-number { font-family: "IBM Plex Mono", monospace; font-size: 14px; font-weight: 500; color: #ED1B2E; min-width: 18px; }' +
+      '.rank-content { flex: 1; }' +
+      '.rank-location { font-size: 13px; font-weight: 600; margin-bottom: 2px; }' +
+      '.rank-factors { font-size: 11px; color: #666; line-height: 1.4; }' +
+      '.rank-score { flex-shrink: 0; }' +
+      '.severity-chip { font-family: "IBM Plex Mono", monospace; font-size: 10px; padding: 2px 6px; border-radius: 2px; }' +
+      '.severity-critical { background: #fde8ea; color: #c41e3a; }' +
+      '.severity-high { background: #fff3e0; color: #c45a00; }' +
+      '.severity-moderate { background: #fef9e7; color: #8a6d00; }' +
+      '.severity-low { background: #e8f5e9; color: #2d6a2e; }' +
+      '.action-list { list-style: none; padding: 0; margin: 0; }' +
+      '.action-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e5e5; }' +
+      '.action-item:last-child { border-bottom: none; }' +
+      '.action-priority { font-family: "IBM Plex Mono", monospace; font-size: 10px; padding: 2px 6px; border-radius: 2px; flex-shrink: 0; height: fit-content; margin-top: 2px; }' +
+      '.priority-immediate, .priority-high { background: #fde8ea; color: #c41e3a; }' +
+      '.priority-medium { background: #fef9e7; color: #8a6d00; }' +
+      '.priority-low { background: #e8f5e9; color: #2d6a2e; }' +
+      '.action-text { font-size: 13px; line-height: 1.5; }' +
+      '.action-rationale { font-size: 11px; color: #666; margin-top: 3px; font-style: italic; }' +
+      '.footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e5e5e5; font-family: "IBM Plex Mono", monospace; font-size: 10px; color: #999; display: flex; justify-content: space-between; }' +
+      '.location-link { color: inherit; text-decoration: none; }' +
+      '@media print { body { padding: 20px 30px; } .map-container img { max-height: 350px; object-fit: contain; } }' +
+      '</style></head><body>' +
+      '<div class="header">' +
+      '<h1>ATLAS Intelligence Briefing</h1>' +
+      '<div class="date">' + dateStr + '<br>' + timeStr + '</div>' +
+      '</div>' +
+      '<div class="red-rule"></div>';
+
+    if (mapImg) {
+      html += '<div class="map-container"><img src="' + mapImg + '" alt="Situation Map"></div>';
+    }
+
+    html += rankingsHtml + narrativeHtml + actionsHtml;
+
+    html += '<div class="footer"><span>ATLAS — AI Threat-Level Analysis System</span><span>For Official Use</span></div>';
+    html += '</body></html>';
+
+    var win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.onload = function () { win.print(); };
   }
 
   // --- Utility ---
@@ -288,7 +380,8 @@ ATLAS.ai = (function () {
     renderCachedBanner: renderCachedBanner,
     showLoading: showLoading,
     hideLoading: hideLoading,
-    showError: showError
+    showError: showError,
+    exportPDF: exportPDF
   };
 
 })();

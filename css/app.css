@@ -76,6 +76,50 @@ calcite-navigation-logo {
   padding-right: 8px;
 }
 
+/* --- Status Bar (clickable hot buttons) --- */
+.status-bar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--calcite-color-text-2);
+  font-family: var(--dragon-data);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.status-chip calcite-icon {
+  color: var(--calcite-color-text-3);
+}
+
+.status-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--calcite-color-text-1);
+}
+
+.status-chip.active {
+  background: rgba(237, 27, 46, 0.15);
+  border-color: rgba(237, 27, 46, 0.4);
+  color: #fff;
+}
+
+.status-chip.active calcite-icon {
+  color: var(--arc-red);
+}
+
 /* --- Threat Level Badge --- */
 .threat-badge {
   display: flex;
@@ -162,6 +206,89 @@ calcite-navigation-logo {
 /* --- Intelligence Panel --- */
 #intel-panel {
   --calcite-shell-panel-width: 420px;
+}
+
+.header-end-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- Mode Toggle Pills --- */
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mode-toggle button {
+  padding: 4px 14px;
+  border: none;
+  background: transparent;
+  color: var(--calcite-color-text-3);
+  font-family: var(--dragon-data);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-toggle button:first-child {
+  border-right: 1px solid var(--calcite-color-border-3);
+}
+
+.mode-toggle button:hover {
+  color: var(--calcite-color-text-1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mode-toggle button.active {
+  background: rgba(237, 27, 46, 0.15);
+  color: #fff;
+}
+
+/* --- Dragon Buttons (generic) --- */
+.dragon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--calcite-color-text-2);
+  font-family: var(--dragon-data);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.dragon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--calcite-color-text-1);
+}
+
+.dragon-btn.brand {
+  background: var(--arc-red);
+  border-color: var(--arc-red);
+  color: #fff;
+}
+
+.dragon-btn.brand:hover {
+  background: var(--arc-red-hover);
+  border-color: var(--arc-red-hover);
+}
+
+.dragon-btn.icon-only {
+  padding: 5px 8px;
 }
 
 #intel-output {
@@ -437,6 +564,42 @@ calcite-navigation-logo {
   color: var(--calcite-color-text-1);
 }
 
+/* --- Narrative Bullets --- */
+.narrative-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+}
+
+.narrative-bullet {
+  font-family: var(--dragon-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--calcite-color-text-2);
+  padding: 5px 0 5px 16px;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.narrative-bullet:last-child {
+  border-bottom: none;
+}
+
+.narrative-bullet::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--arc-red);
+}
+
+.narrative-bullet strong {
+  color: var(--calcite-color-text-1);
+}
+
 /* Clickable location mentions */
 .location-link {
   color: var(--arc-info);
@@ -478,24 +641,99 @@ calcite-navigation-logo {
   margin-bottom: 10px;
 }
 
-.scenario-bar calcite-button {
+.scenario-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--calcite-color-text-2);
+  font-family: var(--dragon-body);
   font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.scenario-btn calcite-icon {
+  color: var(--calcite-color-text-3);
+}
+
+.scenario-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--calcite-color-text-1);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.scenario-btn:hover calcite-icon {
+  color: var(--arc-red);
 }
 
 .input-bar {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
 
-.input-bar calcite-input {
+.dragon-input {
   flex: 1;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--calcite-color-border-3);
+  border-radius: 3px;
+  background: var(--dragon-warm-dark);
+  color: var(--calcite-color-text-1);
+  font-family: var(--dragon-body);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.dragon-input::placeholder {
+  color: var(--calcite-color-text-3);
+}
+
+.dragon-input:focus {
+  border-color: var(--arc-red);
 }
 
 /* --- Voice Button --- */
 #btn-voice.listening {
-  --calcite-color-foreground-2: rgba(237, 27, 46, 0.15);
+  background: rgba(237, 27, 46, 0.15);
+  border-color: rgba(237, 27, 46, 0.4);
   color: var(--arc-red);
   animation: voicePulse 1s ease-in-out infinite;
+}
+
+/* --- Intel Toggle (vertical tab on right edge) --- */
+/* intel-toggle-fixed is now .sidebar.sidebar-right — no extra styles needed */
+
+/* --- Error Banner --- */
+.error-banner {
+  background: rgba(196, 30, 58, 0.12);
+  border: 1px solid rgba(196, 30, 58, 0.3);
+  border-left: 3px solid var(--arc-red);
+  border-radius: 3px;
+  padding: 12px 14px;
+}
+
+.error-banner .error-title {
+  font-family: var(--dragon-data);
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff6b7a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.error-banner .error-message {
+  font-family: var(--dragon-body);
+  font-size: 14px;
+  color: var(--calcite-color-text-2);
+  line-height: 1.5;
 }
 
 @keyframes voicePulse {
@@ -503,55 +741,183 @@ calcite-navigation-logo {
   50% { opacity: 0.5; }
 }
 
-/* --- Layer Toggle Bar --- */
-#layer-bar {
-  position: absolute;
-  bottom: 24px;
-  left: 12px;
+/* --- Sidebar (Supabase-style) --- */
+.sidebar {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  background: var(--dragon-warm-dark);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 50;
   display: flex;
-  gap: 6px;
-  z-index: 10;
-  background: rgba(26, 24, 22, 0.85);
-  backdrop-filter: blur(8px);
-  padding: 6px 10px;
+  flex-direction: column;
+  transition: width 0.15s ease;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: rgba(255, 255, 255, 0.65);
+  padding: 6px 8px;
+}
+
+.sidebar.collapsed {
+  width: 44px;
+  padding: 6px 4px;
+}
+
+/* Hover-to-expand (Supabase behavior) */
+.sidebar.collapsed:hover {
+  width: 220px;
+  padding: 6px 8px;
+}
+
+.sidebar.collapsed:hover .sidebar-label {
+  opacity: 1;
+  width: auto;
+}
+
+.sidebar.collapsed:hover .sidebar-item {
+  justify-content: flex-start;
+  padding: 7px 10px;
+}
+
+.sidebar.collapsed:hover .legend-items {
+  display: flex;
+}
+
+/* Pinned = expanded permanently (hamburger click) */
+.sidebar.pinned {
+  width: 220px;
+  padding: 6px 8px;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 4px;
+  background: none;
+  border: none;
   border-radius: 6px;
-  border: 1px solid var(--calcite-color-border-3);
-}
-
-.layer-divider {
-  width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.15);
-  align-self: center;
-  margin: 0 2px;
-}
-
-#layer-bar calcite-chip {
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: opacity 0.15s;
+  flex-shrink: 0;
 }
 
-#layer-bar calcite-chip::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.35);
-  margin-right: 4px;
-  vertical-align: middle;
-  transition: all 0.15s;
+.sidebar-toggle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-#layer-bar calcite-chip.active {
-  --calcite-color-foreground-2: rgba(237, 27, 46, 0.15);
-  color: var(--arc-red);
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 0;
 }
 
-#layer-bar calcite-chip.active::before {
-  background: var(--arc-red);
-  border-color: var(--arc-red);
-  box-shadow: 0 0 4px rgba(237, 27, 46, 0.4);
+.sidebar-group + .sidebar-group {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-bottom {
+  margin-top: auto;
+  padding-bottom: 8px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+  font-family: var(--dragon-body);
+  text-align: left;
+  width: 100%;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.sidebar-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.sidebar-item calcite-icon {
+  flex-shrink: 0;
+  --calcite-icon-color: currentColor;
+}
+
+.sidebar.collapsed .sidebar-item {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.sidebar-label {
+  overflow: hidden;
+  transition: opacity 0.15s ease, width 0.15s ease;
+}
+
+.sidebar.collapsed .sidebar-label {
+  opacity: 0;
+  width: 0;
+}
+
+/* --- Right sidebar (Intel toggle) --- */
+.sidebar-right {
+  left: auto;
+  right: 0;
+  border-right: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+
+.sidebar-right.collapsed:hover {
+  width: 180px;
+}
+
+/* --- Legend (inside sidebar bottom) --- */
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 10px 8px;
+}
+
+.sidebar.collapsed .legend-items {
+  display: none;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--dragon-body);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 2px 0;
+  transition: opacity 0.2s;
+}
+
+.legend-item.hidden {
+  opacity: 0.25;
+}
+
+.legend-item svg {
+  flex-shrink: 0;
 }
 
 /* --- Map Graphics Popup Override --- */
@@ -594,5 +960,11 @@ calcite-navigation-logo {
 
   .threat-badge {
     display: none;
+  }
+
+  #layer-bar {
+    top: auto;
+    bottom: 12px;
+    min-width: auto;
   }
 }

@@ -1,4 +1,4 @@
-const { list } = require('@vercel/blob');
+const { head } = require('@vercel/blob');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,15 +11,12 @@ module.exports = async function handler(req, res) {
   try {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
 
-    // List blobs to find the briefing
-    const { blobs } = await list({ prefix: 'atlas-briefing', token });
+    // Get the briefing blob by exact pathname
+    const blob = await head('atlas-briefing.json', { token });
 
-    if (!blobs || blobs.length === 0) {
+    if (!blob || !blob.url) {
       return res.status(404).json({ error: 'No cached briefing available' });
     }
-
-    // Get the most recent blob
-    const blob = blobs[blobs.length - 1];
 
     // Private blobs need auth header to read
     const blobRes = await fetch(blob.url, {
@@ -33,6 +30,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json(data);
 
   } catch (err) {
+    // head() throws if blob doesn't exist
+    if (err.message && err.message.includes('not found')) {
+      return res.status(404).json({ error: 'No cached briefing available' });
+    }
     console.error('[BRIEFING] Error:', err);
     return res.status(500).json({ error: 'Failed to fetch briefing', message: err.message });
   }

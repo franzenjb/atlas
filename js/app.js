@@ -33,15 +33,15 @@
     // Update status chip
     var summary = ATLAS.data.getSummary();
     var statusParts = [
-      summary.totalDisasters + ' disasters',
-      summary.totalAlerts + ' alerts',
-      summary.totalFires + ' fires'
+      summary.totalDisasters + ' Disasters',
+      summary.totalAlerts + ' Alerts',
+      summary.totalFires + ' Fires'
     ];
     if (summary.totalEarthquakes > 0) {
-      statusParts.push(summary.totalEarthquakes + ' quakes');
+      statusParts.push(summary.totalEarthquakes + ' Quakes');
     }
     if (ATLAS.data.state.breakingNews && ATLAS.data.state.breakingNews.length > 0) {
-      statusParts.push(ATLAS.data.state.breakingNews.length + ' breaking');
+      statusParts.push(ATLAS.data.state.breakingNews.length + ' Breaking');
     }
     updateStatus(statusParts.join(' \u00B7 '), 'brand');
 

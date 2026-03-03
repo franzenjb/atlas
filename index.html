@@ -26,7 +26,7 @@
   <!-- HEADER -->
   <calcite-navigation slot="header">
     <calcite-navigation-logo slot="logo"
-      icon="layer-overview"
+      icon="layers"
       heading="ATLAS"
       description="AI Threat-Level Analysis System">
     </calcite-navigation-logo>
@@ -35,9 +35,9 @@
         <span class="threat-label">THREAT LEVEL</span>
         <span class="threat-value">GUARDED</span>
       </div>
-      <calcite-chip id="data-status" kind="brand" scale="s" icon="clock">
-        Loading data...
-      </calcite-chip>
+      <div id="status-bar" class="status-bar">
+        <span id="data-status" class="status-chip"><calcite-icon icon="clock" scale="s"></calcite-icon>Loading data...</span>
+      </div>
     </div>
   </calcite-navigation>
 
@@ -45,34 +45,18 @@
   <div id="viewDiv"></div>
   <calcite-scrim id="map-scrim" loading></calcite-scrim>
 
-  <!-- Layer Toggle Bar -->
-  <div id="layer-bar">
-    <calcite-chip id="toggle-disasters" scale="s" icon="government" kind="neutral" appearance="outline-fill" class="active">Disasters</calcite-chip>
-    <calcite-chip id="toggle-alerts" scale="s" icon="bell" kind="neutral" appearance="outline-fill" class="active">Alerts</calcite-chip>
-    <calcite-chip id="toggle-fires" scale="s" icon="flame" kind="neutral" appearance="outline-fill" class="active">Fires</calcite-chip>
-    <calcite-chip id="toggle-quakes" scale="s" icon="graph-bar-side-by-side" kind="neutral" appearance="outline-fill" class="active">Quakes</calcite-chip>
-    <span class="layer-divider"></span>
-    <calcite-chip id="toggle-radar" scale="s" icon="satellite" kind="neutral" appearance="outline-fill">Radar</calcite-chip>
-    <calcite-chip id="toggle-qpf" scale="s" icon="drop" kind="neutral" appearance="outline-fill">QPF</calcite-chip>
-    <calcite-chip id="toggle-wwa" scale="s" icon="caution" kind="neutral" appearance="outline-fill" class="active">Warnings</calcite-chip>
-    <calcite-chip id="toggle-svi" scale="s" icon="users" kind="neutral" appearance="outline-fill">SVI</calcite-chip>
-    <span class="layer-divider"></span>
-    <calcite-chip id="toggle-spc" scale="s" icon="bolt" kind="neutral" appearance="outline-fill">Severe</calcite-chip>
-    <calcite-chip id="toggle-nhc" scale="s" icon="compass" kind="neutral" appearance="outline-fill">Tropical</calcite-chip>
-    <calcite-chip id="toggle-ero" scale="s" icon="droplet" kind="neutral" appearance="outline-fill">Flood Risk</calcite-chip>
-  </div>
-
   <!-- INTELLIGENCE PANEL (right side) -->
   <calcite-shell-panel slot="panel-end" display-mode="float" width-scale="l" id="intel-panel">
     <calcite-panel heading="Intelligence">
 
-      <!-- Mode Tabs -->
-      <div slot="header-actions-end">
-        <calcite-segmented-control id="mode-tabs" scale="s" width="auto">
-          <calcite-segmented-control-item value="ask" checked>Ask</calcite-segmented-control-item>
-          <calcite-segmented-control-item value="brief">Brief</calcite-segmented-control-item>
-          <calcite-segmented-control-item value="assess">Assess</calcite-segmented-control-item>
-        </calcite-segmented-control>
+      <!-- Mode Tabs + Close Button -->
+      <div slot="header-actions-end" class="header-end-actions">
+        <div id="mode-tabs" class="mode-toggle">
+          <button value="ask" class="active">Ask</button>
+          <button value="brief">Brief</button>
+        </div>
+        <button id="btn-export" class="dragon-btn" title="Export PDF"><calcite-icon icon="print" scale="s"></calcite-icon></button>
+        <button id="btn-toggle-intel" class="dragon-btn"><calcite-icon icon="chevrons-right" scale="s"></calcite-icon></button>
       </div>
 
       <!-- Intelligence Output Area -->
@@ -90,14 +74,11 @@
 
         <!-- AI Response Area (hidden until query) -->
         <div id="ai-response" class="intel-section" hidden>
-          <!-- Narrative -->
-          <div id="response-narrative"></div>
-
-          <!-- Metric Cards -->
-          <div id="response-metrics" class="stat-grid"></div>
-
-          <!-- Risk Rankings -->
+          <!-- Risk Rankings (top — clickable, hotlinked) -->
           <div id="response-rankings"></div>
+
+          <!-- Intelligence Assessment -->
+          <div id="response-narrative"></div>
 
           <!-- Recommended Actions -->
           <div id="response-actions"></div>
@@ -115,61 +96,124 @@
 
         <!-- Scenario Buttons (Ask mode) -->
         <div id="ask-scenarios" class="scenario-bar">
-          <calcite-button id="btn-national" appearance="outline-fill" kind="neutral" icon-start="globe" scale="s">
-            National Threat Assessment
-          </calcite-button>
-          <calcite-button id="btn-disasters" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-triangle" scale="s">
-            Active Disasters
-          </calcite-button>
-          <calcite-button id="btn-weather" appearance="outline-fill" kind="neutral" icon-start="partly-cloudy" scale="s">
-            Severe Weather
-          </calcite-button>
-          <calcite-button id="btn-fires" appearance="outline-fill" kind="neutral" icon-start="flame" scale="s">
-            Active Wildfires
-          </calcite-button>
-          <calcite-button id="btn-breaking" appearance="outline-fill" kind="neutral" icon-start="megaphone" scale="s">
-            Breaking Events
-          </calcite-button>
-          <calcite-button id="btn-outlook" appearance="outline-fill" kind="neutral" icon-start="bolt" scale="s">
-            Storm Outlook
-          </calcite-button>
+          <button id="btn-national" class="scenario-btn"><calcite-icon icon="globe" scale="s"></calcite-icon>National Threat Assessment</button>
+          <button id="btn-disasters" class="scenario-btn"><calcite-icon icon="exclamation-mark-triangle" scale="s"></calcite-icon>Active Disasters</button>
+          <button id="btn-weather" class="scenario-btn"><calcite-icon icon="partly-cloudy" scale="s"></calcite-icon>Severe Weather</button>
+          <button id="btn-fires" class="scenario-btn"><calcite-icon icon="heat-chart" scale="s"></calcite-icon>Active Wildfires</button>
+          <button id="btn-breaking" class="scenario-btn"><calcite-icon icon="mega-phone" scale="s"></calcite-icon>Breaking Events</button>
+          <button id="btn-outlook" class="scenario-btn"><calcite-icon icon="rain-thunder" scale="s"></calcite-icon>Storm Outlook</button>
         </div>
 
         <!-- Scenario Buttons (Brief mode) -->
         <div id="brief-scenarios" class="scenario-bar" style="display:none">
-          <calcite-button id="btn-briefing" appearance="outline-fill" kind="neutral" icon-start="file-report" scale="s">
-            Generate Executive Briefing
-          </calcite-button>
-        </div>
-
-        <!-- Scenario Buttons (Assess mode) -->
-        <div id="assess-scenarios" class="scenario-bar" style="display:none">
-          <calcite-button id="btn-hurricane" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-circle" scale="s">
-            Hurricane: Gulf Coast
-          </calcite-button>
-          <calcite-button id="btn-tornado" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-circle" scale="s">
-            Severe Weather: Tornado Alley
-          </calcite-button>
-          <calcite-button id="btn-earthquake" appearance="outline-fill" kind="neutral" icon-start="exclamation-mark-triangle" scale="s">
-            Earthquake: West Coast
-          </calcite-button>
-          <calcite-button id="btn-wildfire-assess" appearance="outline-fill" kind="neutral" icon-start="flame" scale="s">
-            Wildfire Assessment
-          </calcite-button>
+          <button id="btn-briefing" class="scenario-btn"><calcite-icon icon="file-report" scale="s"></calcite-icon>Generate Executive Briefing</button>
         </div>
 
         <!-- Text Input + Voice -->
         <div class="input-bar">
-          <calcite-input id="query-input" type="text" placeholder="Ask ATLAS a question..." icon="search" clearable scale="m"></calcite-input>
-          <calcite-button id="btn-voice" kind="neutral" appearance="outline-fill" icon-start="speech-bubbles" scale="m" title="Voice input"></calcite-button>
-          <calcite-button id="btn-submit" kind="brand" icon-start="send" scale="m">Analyze</calcite-button>
+          <input id="query-input" type="text" class="dragon-input" placeholder="Ask ATLAS a question...">
+          <button id="btn-voice" class="dragon-btn icon-only" title="Voice input"><calcite-icon icon="speech-bubbles" scale="s"></calcite-icon></button>
+          <button id="btn-submit" class="dragon-btn brand"><calcite-icon icon="send" scale="s"></calcite-icon>Analyze</button>
         </div>
       </div>
 
     </calcite-panel>
   </calcite-shell-panel>
 
+
 </calcite-shell>
+
+<!-- Sidebar (Supabase-style, outside shell to avoid stacking context issues) -->
+<div id="sidebar" class="sidebar collapsed">
+  <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">
+    <calcite-icon icon="hamburger" scale="s"></calcite-icon>
+  </button>
+
+  <div class="sidebar-group">
+    <button class="sidebar-item" data-action="home" title="Home">
+      <calcite-icon icon="home" scale="s"></calcite-icon>
+      <span class="sidebar-label">Home</span>
+    </button>
+    <button class="sidebar-item" data-action="zoom-in" title="Zoom In">
+      <calcite-icon icon="plus" scale="s"></calcite-icon>
+      <span class="sidebar-label">Zoom In</span>
+    </button>
+    <button class="sidebar-item" data-action="zoom-out" title="Zoom Out">
+      <calcite-icon icon="minus" scale="s"></calcite-icon>
+      <span class="sidebar-label">Zoom Out</span>
+    </button>
+  </div>
+
+  <div class="sidebar-group">
+    <button class="sidebar-item active" id="toggle-disasters" title="Disasters">
+      <calcite-icon icon="exclamation-mark-triangle" scale="s"></calcite-icon>
+      <span class="sidebar-label">Disasters</span>
+    </button>
+    <button class="sidebar-item active" id="toggle-fires" title="Fires">
+      <calcite-icon icon="effects" scale="s"></calcite-icon>
+      <span class="sidebar-label">Fires</span>
+    </button>
+
+    <button class="sidebar-item active" id="toggle-quakes" title="Earthquakes">
+      <calcite-icon icon="pin-tear" scale="s"></calcite-icon>
+      <span class="sidebar-label">Earthquakes</span>
+    </button>
+  </div>
+
+  <div class="sidebar-group">
+    <button class="sidebar-item" id="toggle-radar" title="Weather Radar">
+      <calcite-icon icon="satellite-3" scale="s"></calcite-icon>
+      <span class="sidebar-label">Weather Radar</span>
+    </button>
+    <button class="sidebar-item" id="toggle-qpf" title="Rain Forecast (QPF)">
+      <calcite-icon icon="rain" scale="s"></calcite-icon>
+      <span class="sidebar-label">Rain Forecast (QPF)</span>
+    </button>
+    <button class="sidebar-item active" id="toggle-wwa" title="Weather Warnings">
+      <calcite-icon icon="exclamation-mark-circle" scale="s"></calcite-icon>
+      <span class="sidebar-label">Weather Warnings</span>
+    </button>
+    <button class="sidebar-item" id="toggle-svi" title="Social Vulnerability">
+      <calcite-icon icon="users" scale="s"></calcite-icon>
+      <span class="sidebar-label">Social Vulnerability</span>
+    </button>
+  </div>
+
+  <div class="sidebar-group">
+    <button class="sidebar-item" id="toggle-spc" title="Severe">
+      <calcite-icon icon="flash" scale="s"></calcite-icon>
+      <span class="sidebar-label">Severe</span>
+    </button>
+    <button class="sidebar-item" id="toggle-nhc" title="Tropical">
+      <calcite-icon icon="cloudy" scale="s"></calcite-icon>
+      <span class="sidebar-label">Tropical</span>
+    </button>
+    <button class="sidebar-item" id="toggle-ero" title="Flood Risk">
+      <calcite-icon icon="effects" scale="s"></calcite-icon>
+      <span class="sidebar-label">Flood Risk</span>
+    </button>
+  </div>
+
+  <div class="sidebar-group sidebar-bottom">
+    <div id="legend-items" class="legend-items"></div>
+    <button class="sidebar-item" data-action="legend" title="Legend">
+      <calcite-icon icon="legend" scale="s"></calcite-icon>
+      <span class="sidebar-label">Legend</span>
+    </button>
+    <button class="sidebar-item" data-action="settings" title="Settings">
+      <calcite-icon icon="gear" scale="s"></calcite-icon>
+      <span class="sidebar-label">Settings</span>
+    </button>
+  </div>
+</div>
+
+<!-- Right sidebar (Intel toggle — mirrors left sidebar) -->
+<div id="btn-toggle-intel-fixed" class="sidebar sidebar-right collapsed">
+  <button class="sidebar-item" id="intelToggleBtn" title="Intelligence">
+    <calcite-icon icon="information" scale="s"></calcite-icon>
+    <span class="sidebar-label">Intelligence</span>
+  </button>
+</div>
 
 <!-- App Scripts -->
 <script src="/js/data.js"></script>

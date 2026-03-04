@@ -120,7 +120,7 @@
     });
 
     // --- Layer toggle chips ---
-    ['disasters', 'alerts', 'fires', 'quakes', 'radar', 'qpf', 'wwa', 'svi', 'spc', 'spc-prob', 'spc-cig', 'nhc', 'ero'].forEach(function (name) {
+    ['disasters', 'alerts', 'fires', 'quakes', 'radar', 'qpf', 'wwa', 'svi', 'spc', 'spc-torn', 'spc-wind', 'spc-hail', 'nhc', 'ero'].forEach(function (name) {
       var chip = document.getElementById('toggle-' + name);
       if (chip) {
         chip.addEventListener('click', function () {

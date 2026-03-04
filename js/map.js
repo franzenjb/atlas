@@ -19,7 +19,9 @@ ATLAS.map = (function () {
   let qpfLayer = null;
   let wwaLayer = null;
   let spcLayer = null;
-  let spcProbLayer = null;
+  let spcTornLayer = null;
+  let spcWindLayer = null;
+  let spcHailLayer = null;
   let cigLayer = null;
   let nhcLayer = null;
   let eroLayer = null;
@@ -157,7 +159,9 @@ ATLAS.map = (function () {
 
         // SPC Convective Outlook — live GeoJSON from spc.noaa.gov
         spcLayer = new GraphicsLayer({ title: 'SPC Convective Outlook', visible: false });
-        spcProbLayer = new GraphicsLayer({ title: 'SPC Probabilistic', visible: false });
+        spcTornLayer = new GraphicsLayer({ title: 'SPC Tornado Probability', visible: false });
+        spcWindLayer = new GraphicsLayer({ title: 'SPC Wind Probability', visible: false });
+        spcHailLayer = new GraphicsLayer({ title: 'SPC Hail Probability', visible: false });
 
         // NHC Tropical Weather — active storms, forecast cones
         nhcLayer = new MapImageLayer({
@@ -178,7 +182,7 @@ ATLAS.map = (function () {
 
         map = new Map({
           basemap: 'dark-gray-vector',
-          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcProbLayer, spcLayer, cigLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
+          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcTornLayer, spcWindLayer, spcHailLayer, spcLayer, cigLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
         });
 
         view = new MapView({
@@ -771,8 +775,9 @@ ATLAS.map = (function () {
       wwa: wwaLayer,
       svi: sviLayer,
       spc: spcLayer,
-      'spc-prob': spcProbLayer,
-      'spc-cig': cigLayer,
+      'spc-torn': spcTornLayer,
+      'spc-wind': spcWindLayer,
+      'spc-hail': spcHailLayer,
       nhc: nhcLayer,
       ero: eroLayer,
       disasters: disasterLayer,
@@ -791,7 +796,7 @@ ATLAS.map = (function () {
   }
 
   function isLayerVisible(name) {
-    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, spc: spcLayer, 'spc-prob': spcProbLayer, 'spc-cig': cigLayer, nhc: nhcLayer, ero: eroLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
+    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, spc: spcLayer, 'spc-torn': spcTornLayer, 'spc-wind': spcWindLayer, 'spc-hail': spcHailLayer, nhc: nhcLayer, ero: eroLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
     var layer = layers[name];
     return layer ? layer.visible : false;
   }
@@ -900,17 +905,23 @@ ATLAS.map = (function () {
     if (!spcLayer) return;
     var Graphic = ATLAS.map._Graphic;
     spcLayer.removeAll();
-    if (spcProbLayer) spcProbLayer.removeAll();
+    if (spcTornLayer) spcTornLayer.removeAll();
+    if (spcWindLayer) spcWindLayer.removeAll();
+    if (spcHailLayer) spcHailLayer.removeAll();
 
-    // Render probabilistic on separate layer
+    var hazardLayers = { tornado: spcTornLayer, wind: spcWindLayer, hail: spcHailLayer };
+
+    // Render probabilistic — each hazard on its own layer
     (intensityData || []).forEach(function (item) {
-      if (!item.geometry || !item.geometry.coordinates || !spcProbLayer) return;
+      if (!item.geometry || !item.geometry.coordinates) return;
+      var targetLayer = hazardLayers[item.hazard];
+      if (!targetLayer) return;
       var fill = item.fill ? hexToRgba(item.fill, 0.35) : [150, 150, 150, 0.3];
       var stroke = item.stroke ? hexToRgb(item.stroke) : [150, 150, 150];
       var rings = item.geometry.type === 'MultiPolygon'
         ? item.geometry.coordinates.reduce(function (acc, poly) { return acc.concat(poly); }, [])
         : item.geometry.coordinates;
-      spcProbLayer.add(new Graphic({
+      targetLayer.add(new Graphic({
         geometry: { type: 'polygon', rings: rings },
         symbol: { type: 'simple-fill', color: fill, outline: { color: stroke, width: 1 } },
         attributes: { hazard: item.hazard, label: item.label2 || item.label, source: item.source },

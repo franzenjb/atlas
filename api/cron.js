@@ -126,14 +126,15 @@ async function fetchBreakingNews() {
 
 async function fetchSPCOutlook() {
   try {
-    const url = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/1/query' +
-      '?where=1%3D1&outFields=LABEL,LABEL2,stroke,fill,dn,idp_source&f=json&returnGeometry=false';
-    const res = await fetch(url);
+    const res = await fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson');
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.features || []).map(f => ({
-      riskLevel: f.attributes.LABEL || f.attributes.LABEL2,
-      category: f.attributes.dn,
+    return (data.features || []).filter(f => f.properties && f.properties.DN > 0).map(f => ({
+      riskLevel: f.properties.LABEL || '',
+      riskLabel: f.properties.LABEL2 || '',
+      category: f.properties.DN,
+      issue: f.properties.ISSUE || '',
+      forecaster: f.properties.FORECASTER || '',
       source: 'SPC Day 1 Convective Outlook'
     }));
   } catch (err) {
@@ -143,37 +144,51 @@ async function fetchSPCOutlook() {
 }
 
 async function fetchSPCIntensity() {
-  try {
-    const baseUrl = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer';
-    const sublayers = [
-      { id: 3, hazard: 'tornado', type: 'probabilistic' },
-      { id: 2, hazard: 'tornado', type: 'significant' },
-      { id: 5, hazard: 'hail', type: 'probabilistic' },
-      { id: 4, hazard: 'hail', type: 'significant' },
-      { id: 7, hazard: 'wind', type: 'probabilistic' },
-      { id: 6, hazard: 'wind', type: 'significant' }
-    ];
-
-    const results = await Promise.all(sublayers.map(async (sl) => {
-      try {
-        const url = `${baseUrl}/${sl.id}/query?where=1%3D1&outFields=LABEL,LABEL2,dn,idp_source&f=json&returnGeometry=false`;
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return (data.features || []).map(f => ({
-          hazard: sl.hazard,
-          type: sl.type,
-          label: f.attributes.LABEL || f.attributes.LABEL2 || '',
-          category: f.attributes.dn
-        }));
-      } catch { return []; }
-    }));
-
-    return results.flat().filter(r => r.label && !r.label.includes('Less Than') && r.category > 0);
-  } catch (err) {
-    console.error('[CRON] SPC intensity error:', err.message);
-    return [];
+  const feeds = [
+    { type: 'tornado', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson' },
+    { type: 'wind', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson' },
+    { type: 'hail', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson' }
+  ];
+  const results = [];
+  for (const feed of feeds) {
+    try {
+      const res = await fetch(feed.url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      (data.features || []).filter(f => f.properties && f.properties.DN > 0).forEach(f => {
+        results.push({
+          hazard: feed.type,
+          type: 'probabilistic',
+          label: f.properties.LABEL || '',
+          label2: f.properties.LABEL2 || '',
+          category: f.properties.DN
+        });
+      });
+    } catch (err) {
+      console.warn('[CRON] SPC ' + feed.type + ' error:', err.message);
+    }
   }
+  return results;
+}
+
+async function fetchSPCCIG() {
+  const feeds = [
+    { type: 'tornado', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cigtorn.nolyr.geojson' },
+    { type: 'wind', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cigwind.nolyr.geojson' },
+    { type: 'hail', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cighail.nolyr.geojson' }
+  ];
+  const results = [];
+  for (const feed of feeds) {
+    try {
+      const res = await fetch(feed.url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      (data.features || []).filter(f => f.properties && f.properties.DN > 0).forEach(f => {
+        results.push({ hazard: feed.type, level: 'CIG' + f.properties.DN, label: f.properties.LABEL2 || f.properties.LABEL || '' });
+      });
+    } catch (err) { console.warn('[CRON] CIG ' + feed.type + ':', err.message); }
+  }
+  return results;
 }
 
 async function fetchNHCOutlook() {
@@ -230,17 +245,8 @@ module.exports = async function handler(req, res) {
       fetchBreakingNews(), fetchSPCOutlook(), fetchSPCIntensity(), fetchNHCOutlook(), fetchEROOutlook()
     ]);
 
-    // CIG reference model for AI briefing context
-    const spcCIG = [
-      { hazard: 'tornado', level: 'CIG1', description: 'EF2+ at 20% | EF3+ at 6% if tornado occurs' },
-      { hazard: 'tornado', level: 'CIG2', description: 'EF2+ at 30% | EF3+ at 12% if tornado occurs' },
-      { hazard: 'tornado', level: 'CIG3', description: 'EF2+ at 40% | EF3+ at 19% if tornado occurs' },
-      { hazard: 'wind', level: 'CIG1', description: 'Standard damaging wind gusts if wind event occurs' },
-      { hazard: 'wind', level: 'CIG2', description: 'Enhanced wind gusts (75mph+) if wind event occurs' },
-      { hazard: 'wind', level: 'CIG3', description: 'Extreme wind gusts (90mph+) if wind event occurs' },
-      { hazard: 'hail', level: 'CIG1', description: 'Large hail (1-2") if hail event occurs' },
-      { hazard: 'hail', level: 'CIG2', description: 'Very large hail (2"+) if hail event occurs' }
-    ];
+    // CIG from live SPC GeoJSON
+    const spcCIG = await fetchSPCCIG();
 
     console.log(`[CRON] Data: ${disasters.length} disasters, ${alerts.length} alerts, ${fires.length} fires, ${earthquakes.length} quakes, ${news.length} news, ${spc.length} SPC, ${spcIntensity.length} SPC intensity, ${nhc.length} NHC, ${ero.length} ERO`);
 

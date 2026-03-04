@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/cron.js": { "maxDuration": 300 }
+  },
   "rewrites": [
     { "source": "/css/(.*)", "destination": "/css/$1" },
     { "source": "/js/(.*)", "destination": "/js/$1" },

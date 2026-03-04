@@ -19,6 +19,7 @@ ATLAS.map = (function () {
   let qpfLayer = null;
   let wwaLayer = null;
   let spcLayer = null;
+  let spcProbLayer = null;
   let cigLayer = null;
   let nhcLayer = null;
   let eroLayer = null;
@@ -156,6 +157,7 @@ ATLAS.map = (function () {
 
         // SPC Convective Outlook — live GeoJSON from spc.noaa.gov
         spcLayer = new GraphicsLayer({ title: 'SPC Convective Outlook', visible: false });
+        spcProbLayer = new GraphicsLayer({ title: 'SPC Probabilistic', visible: false });
 
         // NHC Tropical Weather — active storms, forecast cones
         nhcLayer = new MapImageLayer({
@@ -176,7 +178,7 @@ ATLAS.map = (function () {
 
         map = new Map({
           basemap: 'dark-gray-vector',
-          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcLayer, cigLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
+          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcProbLayer, spcLayer, cigLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
         });
 
         view = new MapView({
@@ -769,6 +771,8 @@ ATLAS.map = (function () {
       wwa: wwaLayer,
       svi: sviLayer,
       spc: spcLayer,
+      'spc-prob': spcProbLayer,
+      'spc-cig': cigLayer,
       nhc: nhcLayer,
       ero: eroLayer,
       disasters: disasterLayer,
@@ -779,8 +783,6 @@ ATLAS.map = (function () {
     var layer = layers[name];
     if (layer) {
       layer.visible = !layer.visible;
-      // CIG rides with SPC toggle
-      if (name === 'spc' && cigLayer) cigLayer.visible = layer.visible;
       console.log('[ATLAS] ' + name + ' layer: ' + (layer.visible ? 'ON' : 'OFF'));
       updateLegendVisibility();
       return layer.visible;
@@ -789,7 +791,7 @@ ATLAS.map = (function () {
   }
 
   function isLayerVisible(name) {
-    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, spc: spcLayer, nhc: nhcLayer, ero: eroLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
+    var layers = { radar: radarLayer, qpf: qpfLayer, wwa: wwaLayer, svi: sviLayer, spc: spcLayer, 'spc-prob': spcProbLayer, 'spc-cig': cigLayer, nhc: nhcLayer, ero: eroLayer, disasters: disasterLayer, alerts: alertLayer, fires: fireLayer, quakes: earthquakeLayer };
     var layer = layers[name];
     return layer ? layer.visible : false;
   }
@@ -898,16 +900,17 @@ ATLAS.map = (function () {
     if (!spcLayer) return;
     var Graphic = ATLAS.map._Graphic;
     spcLayer.removeAll();
+    if (spcProbLayer) spcProbLayer.removeAll();
 
-    // Render probabilistic layers first (underneath)
+    // Render probabilistic on separate layer
     (intensityData || []).forEach(function (item) {
-      if (!item.geometry || !item.geometry.coordinates) return;
+      if (!item.geometry || !item.geometry.coordinates || !spcProbLayer) return;
       var fill = item.fill ? hexToRgba(item.fill, 0.35) : [150, 150, 150, 0.3];
       var stroke = item.stroke ? hexToRgb(item.stroke) : [150, 150, 150];
       var rings = item.geometry.type === 'MultiPolygon'
         ? item.geometry.coordinates.reduce(function (acc, poly) { return acc.concat(poly); }, [])
         : item.geometry.coordinates;
-      spcLayer.add(new Graphic({
+      spcProbLayer.add(new Graphic({
         geometry: { type: 'polygon', rings: rings },
         symbol: { type: 'simple-fill', color: fill, outline: { color: stroke, width: 1 } },
         attributes: { hazard: item.hazard, label: item.label2 || item.label, source: item.source },
@@ -927,7 +930,7 @@ ATLAS.map = (function () {
       }));
     });
 
-    // Render categorical on top
+    // Render categorical on spcLayer
     (outlookData || []).forEach(function (item) {
       if (!item.geometry || !item.geometry.coordinates) return;
       var fill = item.fill ? hexToRgba(item.fill, 0.4) : [150, 150, 150, 0.3];
@@ -1004,8 +1007,8 @@ ATLAS.map = (function () {
       });
       cigLayer.add(graphic);
     });
-    // Match SPC visibility
-    cigLayer.visible = spcLayer ? spcLayer.visible : false;
+    // CIG starts hidden — user toggles independently via sidebar
+    cigLayer.visible = false;
     console.log('[ATLAS] Rendered ' + cigData.length + ' CIG polygons on map');
   }
 

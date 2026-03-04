@@ -154,22 +154,8 @@ ATLAS.map = (function () {
           sublayers: [{ id: 1 }]
         });
 
-        // SPC Convective Outlook — categorical risk + hazard-specific probabilities
-        spcLayer = new MapImageLayer({
-          url: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer',
-          title: 'SPC Convective Outlook',
-          visible: false,
-          opacity: 0.5,
-          sublayers: [
-            { id: 7 },  // Day 1 Probabilistic Wind
-            { id: 6 },  // Day 1 Significant Wind
-            { id: 5 },  // Day 1 Probabilistic Hail
-            { id: 4 },  // Day 1 Significant Hail
-            { id: 3 },  // Day 1 Probabilistic Tornado
-            { id: 2 },  // Day 1 Significant Tornado
-            { id: 1 }   // Day 1 Categorical (on top)
-          ]
-        });
+        // SPC Convective Outlook — live GeoJSON from spc.noaa.gov
+        spcLayer = new GraphicsLayer({ title: 'SPC Convective Outlook', visible: false });
 
         // NHC Tropical Weather — active storms, forecast cones
         nhcLayer = new MapImageLayer({
@@ -877,6 +863,65 @@ ATLAS.map = (function () {
     if (view) view.zoom -= 1;
   }
 
+  // --- Render SPC outlook + probability polygons from live GeoJSON ---
+  function hexToRgba(hex, alpha) {
+    hex = hex.replace('#', '');
+    var r = parseInt(hex.substring(0, 2), 16);
+    var g = parseInt(hex.substring(2, 4), 16);
+    var b = parseInt(hex.substring(4, 6), 16);
+    return [r, g, b, alpha !== undefined ? alpha : 0.5];
+  }
+
+  function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    return [parseInt(hex.substring(0, 2), 16), parseInt(hex.substring(2, 4), 16), parseInt(hex.substring(4, 6), 16)];
+  }
+
+  function renderSPC(outlookData, intensityData) {
+    if (!spcLayer) return;
+    spcLayer.removeAll();
+
+    // Render probabilistic layers first (underneath)
+    (intensityData || []).forEach(function (item) {
+      if (!item.geometry || !item.geometry.coordinates) return;
+      var fill = item.fill ? hexToRgba(item.fill, 0.35) : [150, 150, 150, 0.3];
+      var stroke = item.stroke ? hexToRgb(item.stroke) : [150, 150, 150];
+      var rings = item.geometry.type === 'MultiPolygon'
+        ? item.geometry.coordinates.reduce(function (acc, poly) { return acc.concat(poly); }, [])
+        : item.geometry.coordinates;
+      spcLayer.add(new Graphic({
+        geometry: { type: 'polygon', rings: rings },
+        symbol: { type: 'simple-fill', color: fill, outline: { color: stroke, width: 1 } },
+        attributes: { hazard: item.hazard, label: item.label2 || item.label, source: item.source },
+        popupTemplate: {
+          title: '{source}',
+          content: '<b>' + (item.label2 || item.label) + '</b><br>Issued: ' + (item.issue || '') + '<br>Forecaster: ' + (item.forecaster || '')
+        }
+      }));
+    });
+
+    // Render categorical on top
+    (outlookData || []).forEach(function (item) {
+      if (!item.geometry || !item.geometry.coordinates) return;
+      var fill = item.fill ? hexToRgba(item.fill, 0.4) : [150, 150, 150, 0.3];
+      var stroke = item.stroke ? hexToRgb(item.stroke) : [150, 150, 150];
+      var rings = item.geometry.type === 'MultiPolygon'
+        ? item.geometry.coordinates.reduce(function (acc, poly) { return acc.concat(poly); }, [])
+        : item.geometry.coordinates;
+      spcLayer.add(new Graphic({
+        geometry: { type: 'polygon', rings: rings },
+        symbol: { type: 'simple-fill', color: fill, outline: { color: stroke, width: 1.5 } },
+        attributes: { risk: item.riskLevel, label: item.riskLabel, source: item.source },
+        popupTemplate: {
+          title: 'SPC Day 1 Outlook — {label}',
+          content: '<b>Risk:</b> ' + (item.riskLabel || item.riskLevel) + '<br><b>Issued:</b> ' + (item.issue || '') + '<br><b>Forecaster:</b> ' + (item.forecaster || '')
+        }
+      }));
+    });
+
+    console.log('[ATLAS] Rendered SPC: ' + (outlookData || []).length + ' categorical + ' + (intensityData || []).length + ' probabilistic polygons');
+  }
+
   // --- Render CIG polygons from live SPC GeoJSON ---
   var cigColors = {
     tornado: { 1: [255, 200, 0, 0.3], 2: [255, 120, 0, 0.4], 3: [220, 30, 30, 0.5] },
@@ -941,6 +986,7 @@ ATLAS.map = (function () {
     isLayerVisible: isLayerVisible,
     executeMapCommands: executeMapCommands,
     setFireFilter: setFireFilter,
+    renderSPC: renderSPC,
     renderCIG: renderCIG,
     takeScreenshot: takeScreenshot,
     updateLegendVisibility: updateLegendVisibility,

@@ -246,71 +246,76 @@ ATLAS.data = (function () {
     }
   }
 
-  // --- SPC Convective Outlook ---
+  // --- SPC Convective Outlook (live GeoJSON from spc.noaa.gov) ---
   async function fetchSPCOutlook() {
     try {
-      const url = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/1/query' +
-        '?where=1%3D1&outFields=LABEL,LABEL2,stroke,fill,dn,idp_source&f=json&returnGeometry=false';
-      const res = await fetch(url);
+      var res = await fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson');
       if (!res.ok) return [];
-      const data = await res.json();
-      state.spcOutlook = (data.features || []).map(function (f) {
+      var data = await res.json();
+      state.spcOutlook = (data.features || []).filter(function (f) {
+        return f.properties && f.properties.DN > 0;
+      }).map(function (f) {
         return {
-          riskLevel: f.attributes.LABEL || f.attributes.LABEL2,
-          category: f.attributes.dn,
+          riskLevel: f.properties.LABEL || '',
+          riskLabel: f.properties.LABEL2 || '',
+          category: f.properties.DN,
+          fill: f.properties.fill || '',
+          stroke: f.properties.stroke || '',
+          valid: f.properties.VALID || '',
+          expire: f.properties.EXPIRE || '',
+          issue: f.properties.ISSUE || '',
+          forecaster: f.properties.FORECASTER || '',
+          geometry: f.geometry,
           source: 'SPC Day 1 Convective Outlook'
         };
       });
-      console.log('[ATLAS] Loaded ' + state.spcOutlook.length + ' SPC outlook areas');
+      console.log('[ATLAS] Loaded ' + state.spcOutlook.length + ' SPC outlook areas (live GeoJSON)');
       return state.spcOutlook;
     } catch (err) {
-      console.error('[ATLAS] SPC fetch error:', err);
+      console.error('[ATLAS] SPC outlook fetch error:', err);
       return [];
     }
   }
 
-  // --- SPC Hazard-Specific Intensity (Tornado/Wind/Hail probabilities + significant markers) ---
+  // --- SPC Hazard-Specific Probabilities (live GeoJSON from spc.noaa.gov) ---
   async function fetchSPCIntensity() {
-    try {
-      var baseUrl = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer';
-      var sublayers = [
-        { id: 3, hazard: 'tornado', type: 'probabilistic' },
-        { id: 2, hazard: 'tornado', type: 'significant' },
-        { id: 5, hazard: 'hail', type: 'probabilistic' },
-        { id: 4, hazard: 'hail', type: 'significant' },
-        { id: 7, hazard: 'wind', type: 'probabilistic' },
-        { id: 6, hazard: 'wind', type: 'significant' }
-      ];
-
-      var results = await Promise.all(sublayers.map(function (sl) {
-        var url = baseUrl + '/' + sl.id + '/query?where=1%3D1&outFields=LABEL,LABEL2,dn,idp_source&f=json&returnGeometry=false';
-        return fetch(url).then(function (r) { return r.ok ? r.json() : { features: [] }; })
-          .then(function (data) {
-            return (data.features || []).map(function (f) {
-              return {
-                hazard: sl.hazard,
-                type: sl.type,
-                label: f.attributes.LABEL || f.attributes.LABEL2 || '',
-                category: f.attributes.dn,
-                source: 'SPC Day 1 ' + sl.type.charAt(0).toUpperCase() + sl.type.slice(1) + ' ' + sl.hazard.charAt(0).toUpperCase() + sl.hazard.slice(1)
-              };
-            });
-          })
-          .catch(function () { return []; });
-      }));
-
-      state.spcIntensity = results.flat().filter(function (r) {
-        // Filter out empty/no-risk records
-        return r.label && r.label.indexOf('Less Than') === -1 && r.category > 0;
-      });
-
-      console.log('[ATLAS] Loaded ' + state.spcIntensity.length + ' SPC intensity records');
-      return state.spcIntensity;
-
-    } catch (err) {
-      console.error('[ATLAS] SPC intensity fetch error:', err);
-      return [];
+    var feeds = [
+      { type: 'tornado', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson' },
+      { type: 'wind', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson' },
+      { type: 'hail', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson' }
+    ];
+    var results = [];
+    for (var i = 0; i < feeds.length; i++) {
+      try {
+        var res = await fetch(feeds[i].url);
+        if (!res.ok) continue;
+        var data = await res.json();
+        (data.features || []).filter(function (f) {
+          return f.properties && f.properties.DN > 0;
+        }).forEach(function (f) {
+          results.push({
+            hazard: feeds[i].type,
+            type: 'probabilistic',
+            label: f.properties.LABEL || '',
+            label2: f.properties.LABEL2 || '',
+            category: f.properties.DN,
+            fill: f.properties.fill || '',
+            stroke: f.properties.stroke || '',
+            valid: f.properties.VALID || '',
+            expire: f.properties.EXPIRE || '',
+            issue: f.properties.ISSUE || '',
+            forecaster: f.properties.FORECASTER || '',
+            geometry: f.geometry,
+            source: 'SPC Day 1 ' + feeds[i].type.charAt(0).toUpperCase() + feeds[i].type.slice(1)
+          });
+        });
+      } catch (err) {
+        console.warn('[ATLAS] SPC ' + feeds[i].type + ' fetch error:', err);
+      }
     }
+    state.spcIntensity = results;
+    console.log('[ATLAS] Loaded ' + state.spcIntensity.length + ' SPC probability areas (live GeoJSON)');
+    return state.spcIntensity;
   }
 
   // --- SPC Conditional Intensity Guidance (CIG) ---

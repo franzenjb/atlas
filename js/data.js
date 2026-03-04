@@ -285,34 +285,34 @@ ATLAS.data = (function () {
       { type: 'hail', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson' }
     ];
     var results = [];
-    for (var i = 0; i < feeds.length; i++) {
-      try {
-        var res = await fetch(feeds[i].url);
-        if (!res.ok) continue;
-        var data = await res.json();
-        (data.features || []).filter(function (f) {
-          return f.properties && f.properties.DN > 0;
-        }).forEach(function (f) {
-          results.push({
-            hazard: feeds[i].type,
-            type: 'probabilistic',
-            label: f.properties.LABEL || '',
-            label2: f.properties.LABEL2 || '',
-            category: f.properties.DN,
-            fill: f.properties.fill || '',
-            stroke: f.properties.stroke || '',
-            valid: f.properties.VALID || '',
-            expire: f.properties.EXPIRE || '',
-            issue: f.properties.ISSUE || '',
-            forecaster: f.properties.FORECASTER || '',
-            geometry: f.geometry,
-            source: 'SPC Day 1 ' + feeds[i].type.charAt(0).toUpperCase() + feeds[i].type.slice(1)
+    await Promise.all(feeds.map(function (feed) {
+      return fetch(feed.url).then(function (res) {
+        if (!res.ok) return;
+        return res.json().then(function (data) {
+          (data.features || []).filter(function (f) {
+            return f.properties && f.properties.DN > 0;
+          }).forEach(function (f) {
+            results.push({
+              hazard: feed.type,
+              type: 'probabilistic',
+              label: f.properties.LABEL || '',
+              label2: f.properties.LABEL2 || '',
+              category: f.properties.DN,
+              fill: f.properties.fill || '',
+              stroke: f.properties.stroke || '',
+              valid: f.properties.VALID || '',
+              expire: f.properties.EXPIRE || '',
+              issue: f.properties.ISSUE || '',
+              forecaster: f.properties.FORECASTER || '',
+              geometry: f.geometry,
+              source: 'SPC Day 1 ' + feed.type.charAt(0).toUpperCase() + feed.type.slice(1)
+            });
           });
         });
-      } catch (err) {
-        console.warn('[ATLAS] SPC ' + feeds[i].type + ' fetch error:', err);
-      }
-    }
+      }).catch(function (err) {
+        console.warn('[ATLAS] SPC ' + feed.type + ' fetch error:', err);
+      });
+    }));
     state.spcIntensity = results;
     console.log('[ATLAS] Loaded ' + state.spcIntensity.length + ' SPC probability areas (live GeoJSON)');
     return state.spcIntensity;
@@ -328,30 +328,29 @@ ATLAS.data = (function () {
       { type: 'hail', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cighail.nolyr.geojson' }
     ];
     var results = [];
-    for (var i = 0; i < hazards.length; i++) {
-      try {
-        var res = await fetch(hazards[i].url);
-        if (!res.ok) continue;
-        var data = await res.json();
-        var features = (data.features || []).filter(function (f) { return f.properties && f.properties.DN > 0; });
-        features.forEach(function (f) {
-          results.push({
-            hazard: hazards[i].type,
-            level: 'CIG' + f.properties.DN,
-            label: f.properties.LABEL || '',
-            label2: f.properties.LABEL2 || '',
-            valid: f.properties.VALID || '',
-            expire: f.properties.EXPIRE || '',
-            issue: f.properties.ISSUE || '',
-            forecaster: f.properties.FORECASTER || '',
-            geometry: f.geometry,
-            source: 'SPC Day 1 CIG ' + hazards[i].type.charAt(0).toUpperCase() + hazards[i].type.slice(1)
+    await Promise.all(hazards.map(function (hazard) {
+      return fetch(hazard.url).then(function (res) {
+        if (!res.ok) return;
+        return res.json().then(function (data) {
+          (data.features || []).filter(function (f) { return f.properties && f.properties.DN > 0; }).forEach(function (f) {
+            results.push({
+              hazard: hazard.type,
+              level: 'CIG' + f.properties.DN,
+              label: f.properties.LABEL || '',
+              label2: f.properties.LABEL2 || '',
+              valid: f.properties.VALID || '',
+              expire: f.properties.EXPIRE || '',
+              issue: f.properties.ISSUE || '',
+              forecaster: f.properties.FORECASTER || '',
+              geometry: f.geometry,
+              source: 'SPC Day 1 CIG ' + hazard.type.charAt(0).toUpperCase() + hazard.type.slice(1)
+            });
           });
         });
-      } catch (err) {
-        console.warn('[ATLAS] CIG ' + hazards[i].type + ' fetch error:', err);
-      }
-    }
+      }).catch(function (err) {
+        console.warn('[ATLAS] CIG ' + hazard.type + ' fetch error:', err);
+      });
+    }));
     state.spcCIG = results;
     console.log('[ATLAS] Loaded ' + results.length + ' CIG areas from live SPC GeoJSON');
     return state.spcCIG;

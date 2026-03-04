@@ -314,46 +314,41 @@ ATLAS.data = (function () {
   }
 
   // --- SPC Conditional Intensity Guidance (CIG) ---
-  // Checks MapServer for new CIG sublayers (IDs 26+). Falls back to synthetic test data.
-  // Remove synthetic fallback once real CIG sublayers appear on MapServer.
+  // Live GeoJSON feeds from SPC (launched March 3, 2026)
+  // https://www.weather.gov/news/262402-spc
   async function fetchSPCCIG() {
-    try {
-      // Check if MapServer has new CIG sublayers
-      var msUrl = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer?f=json';
-      var msRes = await fetch(msUrl);
-      if (msRes.ok) {
-        var msData = await msRes.json();
-        var layers = msData.layers || [];
-        var cigLayers = layers.filter(function (l) {
-          return l.name && (l.name.toLowerCase().indexOf('intensity') >= 0 || l.name.toLowerCase().indexOf('conditional') >= 0 || l.name.toLowerCase().indexOf('cig') >= 0);
-        });
-        if (cigLayers.length > 0) {
-          console.log('[ATLAS] Found CIG sublayers:', cigLayers.map(function (l) { return l.id + ':' + l.name; }));
-          // TODO: Query these sublayers for real CIG data
-          // For now, log discovery and continue to synthetic
-        }
-      }
-    } catch (err) {
-      // MapServer check failed, not critical
-    }
-
-    // Synthetic CIG data — models what real CIG output will look like
-    // Based on SPC experimental page: https://www.spc.noaa.gov/exper/conditional-intensity-information/
-    state.spcCIG = [
-      // Tornado: 3 levels — EF2+ probability increases with level
-      { hazard: 'tornado', level: 'CIG1', description: 'EF2+ at 20% | EF3+ at 6% if tornado occurs', severity: 'moderate', synthetic: true },
-      { hazard: 'tornado', level: 'CIG2', description: 'EF2+ at 30% | EF3+ at 12% if tornado occurs', severity: 'high', synthetic: true },
-      { hazard: 'tornado', level: 'CIG3', description: 'EF2+ at 40% | EF3+ at 19% if tornado occurs', severity: 'critical', synthetic: true },
-      // Wind: 3 levels — gust strength increases with level
-      { hazard: 'wind', level: 'CIG1', description: 'Standard damaging wind gusts if wind event occurs', severity: 'moderate', synthetic: true },
-      { hazard: 'wind', level: 'CIG2', description: 'Enhanced wind gusts (75mph+) if wind event occurs', severity: 'high', synthetic: true },
-      { hazard: 'wind', level: 'CIG3', description: 'Extreme wind gusts (90mph+) if wind event occurs', severity: 'critical', synthetic: true },
-      // Hail: 2 levels — size increases with level
-      { hazard: 'hail', level: 'CIG1', description: 'Large hail (1-2") if hail event occurs', severity: 'moderate', synthetic: true },
-      { hazard: 'hail', level: 'CIG2', description: 'Very large hail (2"+) if hail event occurs', severity: 'high', synthetic: true }
+    var hazards = [
+      { type: 'tornado', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cigtorn.nolyr.geojson' },
+      { type: 'wind', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cigwind.nolyr.geojson' },
+      { type: 'hail', url: 'https://www.spc.noaa.gov/products/outlook/day1otlk_cighail.nolyr.geojson' }
     ];
-
-    console.log('[ATLAS] CIG data: synthetic model (8 records) — real CIG sublayers not yet on MapServer');
+    var results = [];
+    for (var i = 0; i < hazards.length; i++) {
+      try {
+        var res = await fetch(hazards[i].url);
+        if (!res.ok) continue;
+        var data = await res.json();
+        var features = (data.features || []).filter(function (f) { return f.properties && f.properties.DN > 0; });
+        features.forEach(function (f) {
+          results.push({
+            hazard: hazards[i].type,
+            level: 'CIG' + f.properties.DN,
+            label: f.properties.LABEL || '',
+            label2: f.properties.LABEL2 || '',
+            valid: f.properties.VALID || '',
+            expire: f.properties.EXPIRE || '',
+            issue: f.properties.ISSUE || '',
+            forecaster: f.properties.FORECASTER || '',
+            geometry: f.geometry,
+            source: 'SPC Day 1 CIG ' + hazards[i].type.charAt(0).toUpperCase() + hazards[i].type.slice(1)
+          });
+        });
+      } catch (err) {
+        console.warn('[ATLAS] CIG ' + hazards[i].type + ' fetch error:', err);
+      }
+    }
+    state.spcCIG = results;
+    console.log('[ATLAS] Loaded ' + results.length + ' CIG areas from live SPC GeoJSON');
     return state.spcCIG;
   }
 

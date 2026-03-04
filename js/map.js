@@ -19,6 +19,7 @@ ATLAS.map = (function () {
   let qpfLayer = null;
   let wwaLayer = null;
   let spcLayer = null;
+  let cigLayer = null;
   let nhcLayer = null;
   let eroLayer = null;
   let countySource = null;
@@ -106,6 +107,7 @@ ATLAS.map = (function () {
         fireLayer = new GraphicsLayer({ title: 'Active Wildfires' });
         earthquakeLayer = new GraphicsLayer({ title: 'Earthquakes' });
         highlightLayer = new GraphicsLayer({ title: 'Highlights' });
+        cigLayer = new GraphicsLayer({ title: 'SPC Conditional Intensity', visible: false });
 
         // CDC SVI layer from Living Atlas
         sviLayer = new FeatureLayer({
@@ -188,7 +190,7 @@ ATLAS.map = (function () {
 
         map = new Map({
           basemap: 'dark-gray-vector',
-          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
+          layers: [sviLayer, radarLayer, qpfLayer, wwaLayer, spcLayer, cigLayer, nhcLayer, eroLayer, alertLayer, disasterLayer, fireLayer, earthquakeLayer, highlightLayer]
         });
 
         view = new MapView({
@@ -791,6 +793,8 @@ ATLAS.map = (function () {
     var layer = layers[name];
     if (layer) {
       layer.visible = !layer.visible;
+      // CIG rides with SPC toggle
+      if (name === 'spc' && cigLayer) cigLayer.visible = layer.visible;
       console.log('[ATLAS] ' + name + ' layer: ' + (layer.visible ? 'ON' : 'OFF'));
       updateLegendVisibility();
       return layer.visible;
@@ -873,6 +877,48 @@ ATLAS.map = (function () {
     if (view) view.zoom -= 1;
   }
 
+  // --- Render CIG polygons from live SPC GeoJSON ---
+  var cigColors = {
+    tornado: { 1: [255, 200, 0, 0.3], 2: [255, 120, 0, 0.4], 3: [220, 30, 30, 0.5] },
+    wind:    { 1: [100, 180, 255, 0.3], 2: [60, 120, 255, 0.4], 3: [30, 60, 200, 0.5] },
+    hail:    { 1: [0, 200, 120, 0.3], 2: [0, 160, 80, 0.4], 3: [0, 120, 60, 0.5] }
+  };
+  var cigOutlines = { tornado: [255, 160, 0], wind: [80, 140, 255], hail: [0, 180, 100] };
+
+  function renderCIG(cigData) {
+    if (!cigLayer) return;
+    cigLayer.removeAll();
+    if (!cigData || cigData.length === 0) return;
+    cigData.forEach(function (item) {
+      if (!item.geometry || !item.geometry.coordinates) return;
+      var dn = parseInt(item.level.replace('CIG', '')) || 1;
+      var fill = (cigColors[item.hazard] || cigColors.wind)[dn] || [150, 150, 150, 0.3];
+      var outline = cigOutlines[item.hazard] || [150, 150, 150];
+      var rings = item.geometry.type === 'MultiPolygon'
+        ? item.geometry.coordinates.reduce(function (acc, poly) { return acc.concat(poly); }, [])
+        : item.geometry.coordinates;
+      var graphic = new Graphic({
+        geometry: { type: 'polygon', rings: rings },
+        symbol: {
+          type: 'simple-fill',
+          color: fill,
+          outline: { color: outline, width: 1.5 }
+        },
+        attributes: { hazard: item.hazard, level: item.level, label: item.label, source: item.source },
+        popupTemplate: {
+          title: 'SPC Conditional Intensity — ' + item.hazard.charAt(0).toUpperCase() + item.hazard.slice(1),
+          content: '<b>Level:</b> ' + item.level + '<br><b>Detail:</b> ' + (item.label || item.label2 || 'Active') +
+            '<br><b>Valid:</b> ' + (item.valid || '') + ' — ' + (item.expire || '') +
+            '<br><b>Forecaster:</b> ' + (item.forecaster || '')
+        }
+      });
+      cigLayer.add(graphic);
+    });
+    // Match SPC visibility
+    cigLayer.visible = spcLayer ? spcLayer.visible : false;
+    console.log('[ATLAS] Rendered ' + cigData.length + ' CIG polygons on map');
+  }
+
   return {
     init: init,
     addDisasters: addDisasters,
@@ -895,6 +941,7 @@ ATLAS.map = (function () {
     isLayerVisible: isLayerVisible,
     executeMapCommands: executeMapCommands,
     setFireFilter: setFireFilter,
+    renderCIG: renderCIG,
     takeScreenshot: takeScreenshot,
     updateLegendVisibility: updateLegendVisibility,
     stateCoords: stateCoords

@@ -30,6 +30,7 @@
     ATLAS.map.addAlerts(ATLAS.data.state.alerts);
     ATLAS.map.addFires(ATLAS.data.state.fires);
     ATLAS.map.addEarthquakes(ATLAS.data.state.earthquakes);
+    ATLAS.map.renderCIG(ATLAS.data.state.spcCIG);
 
     // Build clickable status chips
     var summary = ATLAS.data.getSummary();

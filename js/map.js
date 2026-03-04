@@ -879,6 +879,7 @@ ATLAS.map = (function () {
 
   function renderSPC(outlookData, intensityData) {
     if (!spcLayer) return;
+    var Graphic = ATLAS.map._Graphic;
     spcLayer.removeAll();
 
     // Render probabilistic layers first (underneath)
@@ -932,6 +933,7 @@ ATLAS.map = (function () {
 
   function renderCIG(cigData) {
     if (!cigLayer) return;
+    var Graphic = ATLAS.map._Graphic;
     cigLayer.removeAll();
     if (!cigData || cigData.length === 0) return;
     cigData.forEach(function (item) {

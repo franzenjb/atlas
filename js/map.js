@@ -863,6 +863,23 @@ ATLAS.map = (function () {
     if (view) view.zoom -= 1;
   }
 
+  // --- SPC timestamp formatter: "202603041300" → "Mar 4, 1:00 PM EST" ---
+  function formatSPCTime(raw) {
+    if (!raw || raw.length < 12) return raw || '';
+    var y = parseInt(raw.substring(0, 4));
+    var m = parseInt(raw.substring(4, 6)) - 1;
+    var d = parseInt(raw.substring(6, 8));
+    var h = parseInt(raw.substring(8, 10));
+    var mn = parseInt(raw.substring(10, 12));
+    var utc = new Date(Date.UTC(y, m, d, h, mn));
+    return utc.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
+  }
+
+  function formatSPCTimeRange(valid, expire) {
+    if (!valid && !expire) return '';
+    return formatSPCTime(valid) + ' — ' + formatSPCTime(expire);
+  }
+
   // --- Render SPC outlook + probability polygons from live GeoJSON ---
   function hexToRgba(hex, alpha) {
     hex = hex.replace('#', '');
@@ -895,8 +912,17 @@ ATLAS.map = (function () {
         symbol: { type: 'simple-fill', color: fill, outline: { color: stroke, width: 1 } },
         attributes: { hazard: item.hazard, label: item.label2 || item.label, source: item.source },
         popupTemplate: {
-          title: '{source}',
-          content: '<b>' + (item.label2 || item.label) + '</b><br>Issued: ' + (item.issue || '') + '<br>Forecaster: ' + (item.forecaster || '')
+          title: '<span style="font-family:\'Libre Baskerville\',serif;">' + (item.source || 'SPC Probability') + '</span>',
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+            '<div style="background:' + (item.fill || '#6b7280') + ';padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">' + (item.hazard || 'PROBABILITY').toUpperCase() + ' PROBABILITY</div>' +
+            '<div style="padding:14px 0 8px;text-align:center;">' +
+            '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:28px;color:' + (item.fill || '#a09890') + ';font-weight:700;line-height:1;">' + (item.label2 || item.label || '') + '</div>' +
+            '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">' + (item.hazard || '') + ' Outlook</div></div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Valid</td><td style="padding:6px 10px;">' + formatSPCTimeRange(item.valid, item.expire) + '</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Issued</td><td style="padding:6px 10px;">' + formatSPCTime(item.issue) + '</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Forecaster</td><td style="padding:6px 10px;">' + (item.forecaster || '') + '</td></tr>' +
+            '</table></div>'
         }
       }));
     });
@@ -914,8 +940,18 @@ ATLAS.map = (function () {
         symbol: { type: 'simple-fill', color: fill, outline: { color: stroke, width: 1.5 } },
         attributes: { risk: item.riskLevel, label: item.riskLabel, source: item.source },
         popupTemplate: {
-          title: 'SPC Day 1 Outlook — {label}',
-          content: '<b>Risk:</b> ' + (item.riskLabel || item.riskLevel) + '<br><b>Issued:</b> ' + (item.issue || '') + '<br><b>Forecaster:</b> ' + (item.forecaster || '')
+          title: '<span style="font-family:\'Libre Baskerville\',serif;">SPC Day 1 Outlook</span>',
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+            '<div style="background:' + (item.fill || '#6b7280') + ';padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">' + (item.riskLabel || item.riskLevel || 'OUTLOOK').toUpperCase() + '</div>' +
+            '<div style="padding:14px 0 8px;text-align:center;">' +
+            '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:28px;color:' + (item.fill || '#a09890') + ';font-weight:700;line-height:1;">' + (item.riskLabel || item.riskLevel || '') + '</div>' +
+            '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Categorical Risk</div></div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Valid</td><td style="padding:6px 10px;">' + formatSPCTimeRange(item.valid, item.expire) + '</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Issued</td><td style="padding:6px 10px;">' + formatSPCTime(item.issue) + '</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Forecaster</td><td style="padding:6px 10px;">' + (item.forecaster || '') + '</td></tr>' +
+            '<tr><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener" style="color:' + (item.fill || '#ff6b4a') + ';text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">SPC Outlook Page ↗</a></td></tr>' +
+            '</table></div>'
         }
       }));
     });
@@ -953,10 +989,17 @@ ATLAS.map = (function () {
         },
         attributes: { hazard: item.hazard, level: item.level, label: item.label, source: item.source },
         popupTemplate: {
-          title: 'SPC Conditional Intensity — ' + item.hazard.charAt(0).toUpperCase() + item.hazard.slice(1),
-          content: '<b>Level:</b> ' + item.level + '<br><b>Detail:</b> ' + (item.label || item.label2 || 'Active') +
-            '<br><b>Valid:</b> ' + (item.valid || '') + ' — ' + (item.expire || '') +
-            '<br><b>Forecaster:</b> ' + (item.forecaster || '')
+          title: '<span style="font-family:\'Libre Baskerville\',serif;">SPC Conditional Intensity</span>',
+          content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+            '<div style="background:' + (cigOutlines[item.hazard] ? 'rgb(' + cigOutlines[item.hazard].join(',') + ')' : '#6b7280') + ';padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">CIG — ' + item.hazard.toUpperCase() + '</div>' +
+            '<div style="padding:14px 0 8px;text-align:center;">' +
+            '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:28px;color:' + (cigOutlines[item.hazard] ? 'rgb(' + cigOutlines[item.hazard].join(',') + ')' : '#a09890') + ';font-weight:700;line-height:1;">' + (item.level || '') + '</div>' +
+            '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">' + item.hazard.charAt(0).toUpperCase() + item.hazard.slice(1) + ' Intensity</div></div>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Detail</td><td style="padding:6px 10px;">' + (item.label || item.label2 || 'Active') + '</td></tr>' +
+            '<tr><td style="padding:6px 10px;color:#a09890;">Valid</td><td style="padding:6px 10px;">' + formatSPCTimeRange(item.valid, item.expire) + '</td></tr>' +
+            '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;">Forecaster</td><td style="padding:6px 10px;">' + (item.forecaster || '') + '</td></tr>' +
+            '</table></div>'
         }
       });
       cigLayer.add(graphic);

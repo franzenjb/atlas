@@ -154,7 +154,22 @@ ATLAS.map = (function () {
           title: 'Watches & Warnings',
           visible: false,
           opacity: 0.5,
-          sublayers: [{ id: 1 }]
+          sublayers: [{
+            id: 1,
+            popupTemplate: {
+              title: '{event}',
+              content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+                '<table style="width:100%;border-collapse:collapse;">' +
+                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Type</td><td style="padding:4px 0;">{prod_type}</td></tr>' +
+                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Onset</td><td style="padding:4px 0;">{onset}</td></tr>' +
+                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Ends</td><td style="padding:4px 0;">{ends}</td></tr>' +
+                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Expires</td><td style="padding:4px 0;">{expiration}</td></tr>' +
+                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Office</td><td style="padding:4px 0;">{wfo}</td></tr>' +
+                '</table>' +
+                '<div style="margin-top:8px;"><a href="{url}" target="_blank" style="color:#60a5fa;text-decoration:underline;">Full Alert Details →</a></div>' +
+                '</div>'
+            }
+          }]
         });
 
         // SPC Convective Outlook — live GeoJSON from spc.noaa.gov

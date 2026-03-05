@@ -157,27 +157,45 @@ ATLAS.map = (function () {
           sublayers: [{
             id: 1,
             popupTemplate: {
-              title: '{prod_type}',
+              title: '<span style="font-family:\'Libre Baskerville\',serif;">{prod_type}</span>',
               content: function (feature) {
                 var a = feature.graphic.attributes;
-                var fmt = function (iso) {
-                  if (!iso) return null;
+                // Severity color: W=Warning(red), A=Watch(orange), Y=Advisory(amber), default=statement(slate)
+                var sigColors = { W: '#dc2626', A: '#f97316', Y: '#eab308' };
+                var sigLabels = { W: 'WARNING', A: 'WATCH', Y: 'ADVISORY', S: 'STATEMENT' };
+                var barColor = sigColors[a.sig] || '#64748b';
+                var barLabel = sigLabels[a.sig] || 'WEATHER ALERT';
+                // Format time — simple "Wed 10:00 AM" style
+                var fmtTime = function (iso) {
+                  if (!iso) return '';
                   try {
                     var d = new Date(iso);
-                    if (isNaN(d)) return null;
-                    return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' });
-                  } catch (e) { return null; }
+                    if (isNaN(d)) return '';
+                    var day = d.toLocaleDateString('en-US', { weekday: 'short' });
+                    var time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                    return day + ' ' + time;
+                  } catch (e) { return ''; }
                 };
-                var onset = fmt(a.onset);
-                var ends = fmt(a.ends || a.expiration);
+                var onset = fmtTime(a.onset);
+                var end = fmtTime(a.ends || a.expiration);
+                // Build time display — single line "Wed 10:00 AM → Thu 7:00 PM"
+                var timeHtml = '';
+                if (onset || end) {
+                  var arrow = onset && end ? ' <span style="color:#a09890;margin:0 4px;">→</span> ' : '';
+                  timeHtml = '<div style="padding:14px 0 8px;text-align:center;">' +
+                    '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:20px;color:#f7f5f2;font-weight:600;line-height:1.4;">' +
+                    (onset || '') + arrow + (end || '') + '</div>' +
+                    '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Begin → End</div></div>';
+                }
                 var wfo = a.wfo;
                 var url = a.url;
-                var rows = '';
-                if (onset) rows += '<div style="margin-bottom:6px;"><span style="color:#9ca3af;font-size:12px;">Starts</span><br>' + onset + '</div>';
-                if (ends) rows += '<div style="margin-bottom:6px;"><span style="color:#9ca3af;font-size:12px;">Until</span><br>' + ends + '</div>';
-                if (wfo) rows += '<div style="margin-bottom:6px;"><span style="color:#9ca3af;font-size:12px;">NWS Office</span><br>' + wfo + '</div>';
-                var link = url ? '<div style="margin-top:4px;"><a href="' + url + '" target="_blank" rel="noopener" style="color:#60a5fa;">View Full Alert →</a></div>' : '';
-                return '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;line-height:1.5;">' + rows + link + '</div>';
+                var tableRows = '';
+                if (wfo) tableRows += '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Office</td><td style="padding:6px 10px;">' + wfo + '</td></tr>';
+                var link = url ? '<tr><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="' + url + '" target="_blank" rel="noopener" style="color:' + barColor + ';text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">Full NWS Alert ↗</a></td></tr>' : '';
+                return '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
+                  '<div style="background:' + barColor + ';padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">' + barLabel + '</div>' +
+                  timeHtml +
+                  '<table style="width:100%;border-collapse:collapse;font-size:13px;">' + tableRows + link + '</table></div>';
               }
             }
           }]

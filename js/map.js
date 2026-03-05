@@ -157,17 +157,28 @@ ATLAS.map = (function () {
           sublayers: [{
             id: 1,
             popupTemplate: {
-              title: '{event}',
-              content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
-                '<table style="width:100%;border-collapse:collapse;">' +
-                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Type</td><td style="padding:4px 0;">{prod_type}</td></tr>' +
-                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Onset</td><td style="padding:4px 0;">{onset}</td></tr>' +
-                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Ends</td><td style="padding:4px 0;">{ends}</td></tr>' +
-                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Expires</td><td style="padding:4px 0;">{expiration}</td></tr>' +
-                '<tr><td style="color:#9ca3af;padding:4px 8px 4px 0;white-space:nowrap;">Office</td><td style="padding:4px 0;">{wfo}</td></tr>' +
-                '</table>' +
-                '<div style="margin-top:8px;"><a href="{url}" target="_blank" style="color:#60a5fa;text-decoration:underline;">Full Alert Details →</a></div>' +
-                '</div>'
+              title: '{prod_type}',
+              content: function (feature) {
+                var a = feature.graphic.attributes;
+                var fmt = function (iso) {
+                  if (!iso) return null;
+                  try {
+                    var d = new Date(iso);
+                    if (isNaN(d)) return null;
+                    return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' });
+                  } catch (e) { return null; }
+                };
+                var onset = fmt(a.onset);
+                var ends = fmt(a.ends || a.expiration);
+                var wfo = a.wfo;
+                var url = a.url;
+                var rows = '';
+                if (onset) rows += '<div style="margin-bottom:6px;"><span style="color:#9ca3af;font-size:12px;">Starts</span><br>' + onset + '</div>';
+                if (ends) rows += '<div style="margin-bottom:6px;"><span style="color:#9ca3af;font-size:12px;">Until</span><br>' + ends + '</div>';
+                if (wfo) rows += '<div style="margin-bottom:6px;"><span style="color:#9ca3af;font-size:12px;">NWS Office</span><br>' + wfo + '</div>';
+                var link = url ? '<div style="margin-top:4px;"><a href="' + url + '" target="_blank" rel="noopener" style="color:#60a5fa;">View Full Alert →</a></div>' : '';
+                return '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;line-height:1.5;">' + rows + link + '</div>';
+              }
             }
           }]
         });

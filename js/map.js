@@ -174,6 +174,10 @@ ATLAS.map = (function () {
                 {
                   name: 'end-time',
                   expression: 'var t = IIF(!IsEmpty($feature.ends), $feature.ends, $feature.expiration); IIF(IsEmpty(t), "—", Text(Date(t), "ddd M/D, h:mm A"))'
+                },
+                {
+                  name: 'office-url',
+                  expression: 'var w = $feature.wfo; IIF(IsEmpty(w), "", "https://www.weather.gov/" + Lower(Right(w, Count(w) - 1)))'
                 }
               ],
               content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
@@ -185,7 +189,7 @@ ATLAS.map = (function () {
                 '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Begin → End</div></div>' +
                 '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
                 '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Office</td><td style="padding:6px 10px;">{wfo}</td></tr>' +
-                '<tr><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="{url}" target="_blank" rel="noopener" style="color:{expression/bar-color};text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">Full NWS Alert ↗</a></td></tr>' +
+                '<tr><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="{expression/office-url}" target="_blank" rel="noopener" style="color:{expression/bar-color};text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">NWS Forecast Office ↗</a></td></tr>' +
                 '</table></div>'
             }
           }]

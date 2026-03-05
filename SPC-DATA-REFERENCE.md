@@ -133,12 +133,23 @@ Each day has 4 feeds: `drytcat`, `drytprob`, `windrhcat`, `windrhprob`.
 
 ### 3. AGOL Hosted Feature Layers (Python Notebook sync)
 
-Jeff's current AGOL web map has 3 hosted layers synced hourly by a Python notebook:
-1. **SPC Day 1 Categorical** — risk levels TSTM→HIGH
-2. **SPC Conditional Intensity Guidance (CIG)** — tornado/wind/hail intensity
-3. **SPC Convective Outlooks (NWS MapServer — Live)** — direct from NWS, Days 1-8
+Jeff's AGOL web map: **SPC Severe Weather Outlooks – 4 Layers (Live Hourly Sync)**
 
-**Gap:** The AGOL map is missing separate tornado/wind/hail probability layers. The notebook syncs categorical and CIG but not the individual probabilistic feeds.
+| # | Layer Name | Type | Item ID | Sync |
+|---|-----------|------|---------|------|
+| 1 | Storm Prediction Center Day 1 Categorical | Feature layer (hosted) | `c0df94b392474f888f4420f79cb46aa1` | Hourly notebook |
+| 2 | Storm Prediction Center - Day 1 - Conditional Intensity Guidance (CIG) | Feature layer (hosted) | — | Hourly notebook |
+| 3 | Storm Prediction Center - Day 1 Tornado-Wind-Hail | Feature layer (hosted) | `d30ce31d2fb844d2b6b741e0bef77354` | Hourly notebook |
+| 4 | SPC Convective Outlooks (NWS MapServer — Live) | MapServer | — | Live from NWS |
+
+**Notebooks:**
+| Notebook | Purpose | Schedule |
+|----------|---------|----------|
+| Storm Prediction Center CIG Sync – Hourly | Syncs CIG intensity data | Hourly |
+| Storm Prediction Center Sync – Tornado-Wind-Hail | Syncs tornado/wind/hail probability contours | Hourly |
+| Storm Prediction Center Tornado-Wind-Hail Style | One-time renderer + popup setup | Manual |
+
+The Tornado-Wind-Hail layer has 3 sublayers: (0) Tornado Prob, (1) Wind Prob, (2) Hail Prob.
 
 ---
 
@@ -221,49 +232,32 @@ CIG is ONLY meaningful where probabilistic outlooks already show a threat. It's 
 
 ---
 
-## What the Python Notebook Should Produce
+## Current AGOL Architecture (as of March 4, 2026)
 
-The current notebook syncs 3 layers. It needs to produce **10 separate hosted feature layers** to match ATLAS's architecture:
+### Web Map: SPC Severe Weather Outlooks – 4 Layers (Live Hourly Sync)
 
-### Day 1 (priority — update hourly)
-| Layer Name | GeoJSON Source | Notes |
-|-----------|---------------|-------|
-| SPC Day 1 Categorical | `day1otlk_cat.nolyr.geojson` | Risk levels TSTM→HIGH. **Already exists.** |
-| SPC Day 1 Tornado % | `day1otlk_torn.nolyr.geojson` | **NEW — missing today** |
-| SPC Day 1 Wind % | `day1otlk_wind.nolyr.geojson` | **NEW — missing today** |
-| SPC Day 1 Hail % | `day1otlk_hail.nolyr.geojson` | **NEW — missing today** |
-| SPC Day 1 Sig Tornado | `day1otlk_sigtorn.nolyr.geojson` | 10%+ hatched areas. **NEW** |
-| SPC Day 1 Sig Wind | `day1otlk_sigwind.nolyr.geojson` | **NEW** |
-| SPC Day 1 Sig Hail | `day1otlk_sighail.nolyr.geojson` | **NEW** |
-| SPC Day 1 CIG | `day1otlk_cigtorn/cigwind/cighail` | **Already exists** (combine 3 feeds) |
-
-### Day 2 (update every 6 hours)
-| Layer Name | GeoJSON Source |
-|-----------|---------------|
-| SPC Day 2 Categorical | `day2otlk_cat.nolyr.geojson` |
-| SPC Day 2 Tornado/Wind/Hail % | `day2otlk_torn/wind/hail` (combine or split) |
-
-### Day 3-8 (update daily)
-Can use NWS MapServer for these — less critical, no custom popups needed.
-
-### AGOL Web Map Organization
 ```
-📂 SPC Severe Weather (Group Layer)
-├── 📂 Day 1 Convective
-│   ├── Categorical (risk levels) ← on by default
-│   ├── Tornado %
-│   ├── Sig Tornado
-│   ├── Wind %
-│   ├── Sig Wind
-│   ├── Hail %
-│   ├── Sig Hail
-│   └── CIG (intensity)
-├── 📂 Day 2 Convective
-│   ├── Categorical
-│   └── Probabilities
-├── 📂 Day 3-8 (MapServer — live, no sync)
-└── 📂 Fire Weather (MapServer — live)
+SPC Severe Weather Outlooks
+├── Storm Prediction Center Day 1 Categorical          ← hosted, hourly sync
+├── Storm Prediction Center - Day 1 - CIG              ← hosted, hourly sync
+├── Storm Prediction Center - Day 1 Tornado-Wind-Hail  ← hosted, hourly sync
+│   ├── SPC Day 1 Tornado Prob (sublayer 0)
+│   ├── SPC Day 1 Wind Prob (sublayer 1)
+│   └── SPC Day 1 Hail Prob (sublayer 2)
+└── SPC Convective Outlooks (NWS MapServer)             ← live, Days 1-8
 ```
+
+### Notebooks
+| Notebook | Schedule | What it syncs |
+|----------|----------|---------------|
+| Storm Prediction Center CIG Sync – Hourly | Hourly | CIG intensity (3 hazards combined) |
+| Storm Prediction Center Sync – Tornado-Wind-Hail | Hourly | Tornado/Wind/Hail probability contours |
+| Storm Prediction Center Tornado-Wind-Hail Style | Manual (one-time) | Renderer colors + Arcade popups |
+
+### Future Expansion
+- Sig Tornado/Wind/Hail layers (only populated on high-risk days — add when needed)
+- Day 2 hosted layers (categorical + probabilistic)
+- Day 3-8: keep on NWS MapServer (low priority, no custom popups needed)
 
 ### Why Hosted > MapServer for Day 1-2
 - **Custom popups** with formatted ET timestamps, color-coded banners, forecaster info

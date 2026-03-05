@@ -39,7 +39,7 @@ async function fetchNWS() {
       .map(f => ({
         event: f.properties.event,
         severity: f.properties.severity,
-        areas: f.properties.areaDesc,
+        areas: (f.properties.areaDesc || '').substring(0, 200),
         onset: f.properties.onset,
         expires: f.properties.expires
       }))
@@ -297,7 +297,7 @@ module.exports = async function handler(req, res) {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: `You are ATLAS, an AI disaster intelligence analyst. Generate a comprehensive executive briefing from the provided data for emergency management leadership.
 
 When SPC data is present, report BOTH dimensions:
@@ -319,6 +319,7 @@ Provide 4-6 metrics, 5-7 rankings, 4-6 actions. Use ONLY the provided data. Neve
     });
 
     const responseText = message.content.filter(b => b.type === 'text').map(b => b.text).join('');
+    console.log(`[CRON] Claude response: stop_reason=${message.stop_reason}, length=${responseText.length}, first100=${responseText.substring(0, 100)}`);
 
     let briefing;
     try {

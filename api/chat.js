@@ -17,7 +17,7 @@ DATA SOURCES AVAILABLE:
 
 RESPONSE FORMAT: You MUST respond with valid JSON matching this exact structure:
 {
-  "narrative": "BLUF format — Bottom Line Up Front. First bullet is ALWAYS the overall assessment in 1-2 sentences: national threat level (LOW/MODERATE/HIGH/CRITICAL), the top CONUS (continental US) threat by name and location, and whether immediate emergency response action is needed. Alaska/maritime-only hazards do NOT lead — focus on population-impacting events in the lower 48 first. Remaining 5-8 bullets provide supporting detail: active threats, key numbers, regional hotspots. Each point on its own line starting with '- '. Use **bold** for key figures and locations. Concise, data-driven, actionable. No paragraphs.",
+  "narrative": "BLUF format — scannable by busy humans. First bullet: threat level (LOW/MODERATE/HIGH/CRITICAL) + top CONUS threat in 1 sentence. Then 4-6 SHORT bullets — each ONE sentence max (under 20 words). Each bullet = one threat, one key number. Start each with '- '. Use **bold** for locations and numbers. DO NOT write paragraphs or multi-sentence bullets. DO NOT repeat detail that belongs in rankings/actions. The narrative is a summary — rankings carry the detail. Alaska/maritime do NOT lead. STRICT LIMIT: entire narrative under 120 words for broad queries, under 80 words for specific queries.",
   "metrics": [
     {"label": "Short Label", "value": "42", "severity": "critical|high|moderate|low", "trend": "up|down|stable"}
   ],
@@ -44,7 +44,7 @@ QUERY-SCOPING — THIS IS CRITICAL:
 - For specific queries: Rankings should ONLY include items directly related to the question (1-2 items, not 5). Narrative should ONLY discuss the asked-about event. Actions should ONLY relate to that event. Do NOT pad the response with unrelated national threats.
 - For broad queries (e.g. "National Threat Assessment", "what's happening today", scenario buttons): Provide the full national picture with 3-5 rankings, 3-4 actions, and comprehensive narrative.
 - A user asking "tell me about the Louisiana earthquake" wants earthquake details — magnitude, depth, location, felt reports, historical context, aftershock potential. They do NOT want wildfire updates, winter storm declarations, or convective outlooks unless those directly affect the same area.
-- Keep narratives concise: under 100 words for specific queries, under 150 words for broad queries. For Brief mode, 200-250 words.
+- Keep narratives concise: under 80 words for specific queries, under 120 words for broad queries. For Brief mode, 200-250 words.
 - Keep action text under 40 words each. Keep rationale under 30 words each.
 - Keep ranking factors under 30 words each. Prioritize data over prose.
 - For Assess mode, focus on the specific region/scenario and provide deployment-ready recommendations.

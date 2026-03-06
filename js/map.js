@@ -173,7 +173,10 @@ ATLAS.map = (function () {
 
                 var wfo = a.wfo || '';
                 var officeUrl = wfo ? 'https://www.weather.gov/' + wfo.substring(1).toLowerCase() : '';
-                var alertUrl = a.url || '';
+                // Convert API URL to human-readable alerts.weather.gov page
+                var rawUrl = a.url || '';
+                var capId = a.cap_id || '';
+                var alertUrl = capId ? 'https://alerts.weather.gov/search?id=' + encodeURIComponent(capId) : rawUrl;
 
                 var el = document.createElement('div');
                 el.style.cssText = "font-family:'Source Sans Pro',sans-serif;color:#f7f5f2;";
@@ -191,8 +194,8 @@ ATLAS.map = (function () {
                   '</table>';
 
                 // For generic statements, fetch the actual hazard description from NWS API
-                if (alertUrl && (!sig || sig.trim() === '')) {
-                  fetch(alertUrl, { headers: { 'Accept': 'application/geo+json' } })
+                if (rawUrl && (!sig || sig.trim() === '')) {
+                  fetch(rawUrl, { headers: { 'Accept': 'application/geo+json' } })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                       var desc = (data.properties || {}).description || '';

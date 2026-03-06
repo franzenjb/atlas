@@ -719,9 +719,10 @@ ATLAS.map = (function () {
 
       var sevLabel = (r.severity || 'moderate').toUpperCase();
       var sevBg = '#6b7280';
+      var sevColor = '#fff';
       if (r.severity === 'critical') sevBg = '#ef4444';
       else if (r.severity === 'high') sevBg = '#f97316';
-      else if (r.severity === 'moderate') sevBg = '#eab308';
+      else if (r.severity === 'moderate') { sevBg = '#a16207'; }
       else if (r.severity === 'low') sevBg = '#22c55e';
 
       var popupContent = '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +

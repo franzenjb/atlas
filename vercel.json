@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/cron?secret=${CRON_SECRET}", "schedule": "*/30 * * * *" }
+  ],
   "functions": {
     "api/cron.js": { "maxDuration": 300 }
   },

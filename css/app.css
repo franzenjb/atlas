@@ -469,16 +469,16 @@ calcite-navigation-logo {
 
 .rank-location {
   font-family: var(--dragon-body);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--calcite-color-text-1);
+  color: #fff;
   margin-bottom: 2px;
 }
 
 .rank-factors {
   font-family: var(--dragon-body);
-  font-size: 12px;
-  color: var(--calcite-color-text-3);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
   line-height: 1.4;
 }
 
@@ -539,14 +539,14 @@ calcite-navigation-logo {
 
 .action-text {
   font-family: var(--dragon-body);
-  font-size: 14px;
-  color: var(--calcite-color-text-2);
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.82);
   line-height: 1.5;
 }
 
 .action-rationale {
-  font-size: 12px;
-  color: var(--calcite-color-text-3);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
   margin-top: 4px;
   font-style: italic;
 }
@@ -554,14 +554,14 @@ calcite-navigation-logo {
 /* --- Narrative --- */
 .narrative-text {
   font-family: var(--dragon-body);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.7;
-  color: var(--calcite-color-text-2);
+  color: rgba(255, 255, 255, 0.82);
   margin-bottom: 16px;
 }
 
 .narrative-text strong {
-  color: var(--calcite-color-text-1);
+  color: #fff;
 }
 
 /* --- Narrative Bullets --- */
@@ -573,9 +573,9 @@ calcite-navigation-logo {
 
 .narrative-bullet {
   font-family: var(--dragon-body);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
-  color: var(--calcite-color-text-2);
+  color: rgba(255, 255, 255, 0.82);
   padding: 5px 0 5px 16px;
   position: relative;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -597,7 +597,7 @@ calcite-navigation-logo {
 }
 
 .narrative-bullet strong {
-  color: var(--calcite-color-text-1);
+  color: #fff;
 }
 
 /* Clickable location mentions */

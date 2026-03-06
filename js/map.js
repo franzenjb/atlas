@@ -173,10 +173,9 @@ ATLAS.map = (function () {
 
                 var wfo = a.wfo || '';
                 var officeUrl = wfo ? 'https://www.weather.gov/' + wfo.substring(1).toLowerCase() : '';
-                // Convert API URL to human-readable alerts.weather.gov page
                 var rawUrl = a.url || '';
-                var capId = a.cap_id || '';
-                var alertUrl = capId ? 'https://alerts.weather.gov/search?id=' + encodeURIComponent(capId) : rawUrl;
+                // Link to NWS office page — always works, human-readable
+                var alertUrl = wfo ? 'https://www.weather.gov/' + wfo.substring(1).toLowerCase() : 'https://www.weather.gov/alerts';
 
                 var el = document.createElement('div');
                 el.style.cssText = "font-family:'Source Sans Pro',sans-serif;color:#f7f5f2;";

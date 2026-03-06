@@ -36,15 +36,18 @@ RULES:
 - Use ONLY the data provided in the context. Never fabricate disaster data, alert counts, or statistics.
 - If data is insufficient for a complete analysis, say so in the narrative and work with what you have.
 - Always include lat/lon coordinates in rankings so the map can zoom to locations.
-- Metrics array should have 3-4 items. Rankings should have 3-5 items. Actions should have 3-4 items.
-- mapCommands should have 1-2 items — the most important views.
 - Severity levels: critical (life-threatening/major), high (significant), moderate (notable), low (monitor).
-- Keep the narrative under 150 words. Be specific with numbers and locations. Be concise — no filler.
+- CRITICAL: Output ONLY the JSON object. No text before or after. No markdown fences. No headers.
+
+QUERY-SCOPING — THIS IS CRITICAL:
+- MATCH your response scope to the user's question. If they ask about a SPECIFIC event (e.g. "Louisiana earthquake", "wildfires in Texas"), focus your ENTIRE response on that topic.
+- For specific queries: Rankings should ONLY include items directly related to the question (1-2 items, not 5). Narrative should ONLY discuss the asked-about event. Actions should ONLY relate to that event. Do NOT pad the response with unrelated national threats.
+- For broad queries (e.g. "National Threat Assessment", "what's happening today", scenario buttons): Provide the full national picture with 3-5 rankings, 3-4 actions, and comprehensive narrative.
+- A user asking "tell me about the Louisiana earthquake" wants earthquake details — magnitude, depth, location, felt reports, historical context, aftershock potential. They do NOT want wildfire updates, winter storm declarations, or convective outlooks unless those directly affect the same area.
+- Keep narratives concise: under 100 words for specific queries, under 150 words for broad queries. For Brief mode, 200-250 words.
 - Keep action text under 40 words each. Keep rationale under 30 words each.
 - Keep ranking factors under 30 words each. Prioritize data over prose.
-- For Brief mode, narrative can be 200-250 words covering all threat categories.
 - For Assess mode, focus on the specific region/scenario and provide deployment-ready recommendations.
-- CRITICAL: Output ONLY the JSON object. No text before or after. No markdown fences. No headers.
 
 WILDFIRE ANALYSIS:
 - Prioritize large uncontained fires. Include acreage, containment %, and personnel in your analysis.

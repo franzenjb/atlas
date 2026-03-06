@@ -83,11 +83,14 @@ async function fetchUSGS() {
     const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_month.geojson');
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.features || []).map(f => ({
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    return (data.features || []).filter(f => f.properties.time >= sevenDaysAgo).map(f => ({
       magnitude: f.properties.mag,
       place: f.properties.place,
       time: new Date(f.properties.time).toISOString(),
       alert: f.properties.alert,
+      felt: f.properties.felt,
+      significance: f.properties.sig,
       lat: f.geometry.coordinates[1],
       lon: f.geometry.coordinates[0],
       depth: f.geometry.coordinates[2]
@@ -265,7 +268,7 @@ module.exports = async function handler(req, res) {
     dataContext += JSON.stringify(alerts.slice(0, 30));
     dataContext += `\n\nACTIVE WILDFIRES (${fires.length} total):\n`;
     dataContext += JSON.stringify(fires.slice(0, 30));
-    dataContext += `\n\nRECENT EARTHQUAKES M4.5+ (${earthquakes.length} in last 30 days):\n`;
+    dataContext += `\n\nRECENT EARTHQUAKES M4.5+ (${earthquakes.length} in last 7 days):\n`;
     dataContext += JSON.stringify(earthquakes.slice(0, 15));
     if (news.length > 0) {
       dataContext += `\n\nBREAKING NEWS / MASS CASUALTY EVENTS (${news.length} in last 24h):\n`;

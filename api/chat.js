@@ -117,7 +117,7 @@ module.exports = async function handler(req, res) {
         dataContext += JSON.stringify(context.fires.slice(0, 30), null, 0);
       }
       if (context.earthquakes && context.earthquakes.length > 0) {
-        dataContext += `\n\nRECENT EARTHQUAKES M4.5+ (${context.earthquakes.length} in last 30 days, from USGS):\n`;
+        dataContext += `\n\nRECENT EARTHQUAKES M4.5+ (${context.earthquakes.length} in last 7 days, from USGS):\n`;
         dataContext += JSON.stringify(context.earthquakes.slice(0, 15), null, 0);
       }
       if (context.breakingNews && context.breakingNews.length > 0) {

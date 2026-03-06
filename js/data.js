@@ -190,6 +190,9 @@ ATLAS.data = (function () {
       const data = await res.json();
       const features = data.features || [];
 
+      // 7-day cutoff — older earthquakes aren't operationally relevant
+      var sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
       state.earthquakes = features.map(function (f) {
         var p = f.properties;
         var coords = f.geometry.coordinates; // [lon, lat, depth]
@@ -198,6 +201,7 @@ ATLAS.data = (function () {
           magnitude: p.mag,
           place: p.place,
           time: new Date(p.time).toISOString(),
+          timeMs: p.time,
           url: p.url,
           tsunami: p.tsunami,
           alert: p.alert, // PAGER: green/yellow/orange/red
@@ -209,6 +213,8 @@ ATLAS.data = (function () {
           depth: coords[2]
         };
       }).filter(function (q) {
+        // Only show earthquakes from the last 7 days
+        if (q.timeMs < sevenDaysAgo) return false;
         // US only: CONUS + HI + Caribbean territories (M4.5+), Alaska requires M5.0+
         // Pacific territories (Guam, CNMI, American Samoa) have positive longitudes
         var isAlaska = q.lat >= 51 && q.lat <= 72 && q.lon >= -180 && q.lon <= -129;

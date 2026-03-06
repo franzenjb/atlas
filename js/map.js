@@ -157,44 +157,61 @@ ATLAS.map = (function () {
           sublayers: [{
             id: 1,
             popupTemplate: {
-              title: '<span style="font-family:\'Libre Baskerville\',serif;">{event}</span>',
-              expressionInfos: [
-                {
-                  name: 'bar-label',
-                  expression: 'var s = $feature.sig; IIF(s == "W", "WARNING", IIF(s == "A", "WATCH", IIF(s == "Y", "ADVISORY", "STATEMENT")))'
-                },
-                {
-                  name: 'bar-color',
-                  expression: 'var s = $feature.sig; IIF(s == "W", "#dc2626", IIF(s == "A", "#f97316", IIF(s == "Y", "#eab308", "#64748b")))'
-                },
-                {
-                  name: 'begin-time',
-                  expression: 'var t = $feature.onset; IIF(IsEmpty(t), "—", Text(Date(t), "ddd M/D, h:mm A"))'
-                },
-                {
-                  name: 'end-time',
-                  expression: 'var t = IIF(!IsEmpty($feature.ends), $feature.ends, $feature.expiration); IIF(IsEmpty(t), "—", Text(Date(t), "ddd M/D, h:mm A"))'
-                },
-                {
-                  name: 'office-url',
-                  expression: 'var w = $feature.wfo; IIF(IsEmpty(w), "", "https://www.weather.gov/" + Lower(Right(w, Count(w) - 1)))'
-                },
-                {
-                  name: 'alert-url',
-                  expression: 'var u = $feature.url; IIF(IsEmpty(u), "", u)'
+              title: '<span style="font-family:\'Libre Baskerville\',serif;">{prod_type}</span>',
+              outFields: ['*'],
+              content: function(feature) {
+                var a = feature.graphic.attributes;
+                var sig = a.sig || '';
+                var barLabel = sig === 'W' ? 'WARNING' : sig === 'A' ? 'WATCH' : sig === 'Y' ? 'ADVISORY' : 'STATEMENT';
+                var barColor = sig === 'W' ? '#dc2626' : sig === 'A' ? '#f97316' : sig === 'Y' ? '#eab308' : '#64748b';
+
+                var onset = a.onset ? new Date(a.onset) : null;
+                var endTime = a.ends ? new Date(a.ends) : a.expiration ? new Date(a.expiration) : null;
+                var fmt = { weekday: 'short', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+                var beginStr = onset ? onset.toLocaleDateString('en-US', fmt) : '—';
+                var endStr = endTime ? endTime.toLocaleDateString('en-US', fmt) : '—';
+
+                var wfo = a.wfo || '';
+                var officeUrl = wfo ? 'https://www.weather.gov/' + wfo.substring(1).toLowerCase() : '';
+                var alertUrl = a.url || '';
+
+                var el = document.createElement('div');
+                el.style.cssText = "font-family:'Source Sans Pro',sans-serif;color:#f7f5f2;";
+                el.innerHTML =
+                  '<div style="background:' + barColor + ';padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">' + barLabel + '</div>' +
+                  '<div id="wwa-hazard-detail" style="padding:10px 0 0;font-size:13px;color:#d4c8be;font-style:italic;text-align:center;display:none;"></div>' +
+                  '<div style="padding:16px 0 10px;text-align:center;">' +
+                  '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:18px;color:#f7f5f2;font-weight:600;line-height:1.3;">' + beginStr + '</div>' +
+                  '<div style="color:#a09890;font-size:16px;margin:4px 0;">↓</div>' +
+                  '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:18px;color:#f7f5f2;font-weight:600;line-height:1.3;">' + endStr + '</div>' +
+                  '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Begin → End</div></div>' +
+                  '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+                  '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Office</td><td style="padding:6px 10px;">' + wfo + '</td></tr>' +
+                  (alertUrl ? '<tr><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="' + alertUrl + '" target="_blank" rel="noopener" style="color:' + barColor + ';text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">Full NWS Alert ↗</a></td></tr>' : '') +
+                  '</table>';
+
+                // For generic statements, fetch the actual hazard description from NWS API
+                if (alertUrl && (!sig || sig.trim() === '')) {
+                  fetch(alertUrl, { headers: { 'Accept': 'application/geo+json' } })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                      var desc = (data.properties || {}).description || '';
+                      // Extract the HAZARD line or first sentence
+                      var hazardMatch = desc.match(/HAZARD[.\s]*\.*(.*?)(?:\n|SOURCE)/i);
+                      var summary = hazardMatch ? hazardMatch[1].trim() : desc.split('\n')[0].substring(0, 120);
+                      if (summary) {
+                        var detailEl = el.querySelector('#wwa-hazard-detail');
+                        if (detailEl) {
+                          detailEl.textContent = summary;
+                          detailEl.style.display = 'block';
+                        }
+                      }
+                    })
+                    .catch(function() {});
                 }
-              ],
-              content: '<div style="font-family:\'Source Sans Pro\',sans-serif;color:#f7f5f2;">' +
-                '<div style="background:{expression/bar-color};padding:6px 12px;margin:-12px -12px 0;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#fff;">{expression/bar-label}</div>' +
-                '<div style="padding:16px 0 10px;text-align:center;">' +
-                '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:18px;color:#f7f5f2;font-weight:600;line-height:1.3;">{expression/begin-time}</div>' +
-                '<div style="color:#a09890;font-size:16px;margin:4px 0;">↓</div>' +
-                '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:18px;color:#f7f5f2;font-weight:600;line-height:1.3;">{expression/end-time}</div>' +
-                '<div style="font-size:11px;color:#a09890;text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Begin → End</div></div>' +
-                '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-                '<tr style="background:rgba(255,255,255,0.04);"><td style="padding:6px 10px;color:#a09890;width:80px;">Office</td><td style="padding:6px 10px;">{wfo}</td></tr>' +
-                '<tr><td colspan="2" style="padding:8px 10px;text-align:center;"><a href="{expression/alert-url}" target="_blank" rel="noopener" style="color:{expression/bar-color};text-decoration:none;font-family:\'IBM Plex Mono\',monospace;font-size:11px;letter-spacing:0.5px;">Full NWS Alert ↗</a></td></tr>' +
-                '</table></div>'
+
+                return el;
+              }
             }
           }]
         });

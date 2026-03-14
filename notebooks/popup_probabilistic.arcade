@@ -1,0 +1,133 @@
+// SPC Day 1 Probabilistic Outlook — Popup
+// Paste as: Arcade Expression Content Element in AGOL Map Viewer
+// Map Viewer → Click sublayer → Pop-ups → Add content → Arcade
+//
+// USE FOR: Tornado Prob, Wind Prob, Hail Prob sublayers
+// Change the hazardName variable below for each sublayer.
+
+// === CONFIG ===
+// Change this for each sublayer:
+//   "Tornado"  for SPC Day 1 Tornado Prob
+//   "Wind"     for SPC Day 1 Wind Prob
+//   "Hail"     for SPC Day 1 Hail Prob
+var hazardName = "Tornado"
+
+// === EXTRACT ===
+var label = DefaultValue($feature.LABEL, "—")
+var label2 = DefaultValue($feature.LABEL2, "Unknown")
+var dn = DefaultValue($feature.DN, 0)
+var forecaster = DefaultValue($feature.FORECASTER, "—")
+var fillColor = DefaultValue($feature.fill, "#888")
+var strokeColor = DefaultValue($feature.stroke, "#666")
+
+var validStr = Text(DefaultValue($feature.VALID, 0))
+var expireStr = Text(DefaultValue($feature.EXPIRE, 0))
+var issueStr = Text(DefaultValue($feature.ISSUE, 0))
+
+// === TEXT COLOR — ensures legibility on any fill ===
+// Light fills → dark text. Dark fills → white text.
+// Uses perceived luminance formula (red/green weighted for color blindness)
+var hex = Replace(fillColor, "#", "")
+var r = Number("0x" + Left(hex, 2))
+var g = Number("0x" + Mid(hex, 2, 2))
+var b = Number("0x" + Mid(hex, 4, 2))
+var luminance = (r * 0.299 + g * 0.587 + b * 0.114)
+
+var headerTxt = "#fff"
+var headerSub = "rgba(255,255,255,0.85)"
+if (luminance > 150) {
+  headerTxt = "#1a1a1a"
+  headerSub = "rgba(0,0,0,0.6)"
+}
+
+// === HAZARD LABEL (text-only, no emoji — accessible) ===
+var hazardTag = Upper(hazardName)
+
+// === TIME PARSING (UTC → Eastern) ===
+var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+var utcOffset = -4
+var tzLabel = "ET"
+
+var validF = "—"
+if (Count(validStr) >= 12) {
+  var vMo = Number(Mid(validStr, 4, 2))
+  var vDy = Number(Mid(validStr, 6, 2))
+  var vHr24 = Number(Mid(validStr, 8, 2)) + utcOffset
+  if (vHr24 < 0) { vHr24 = vHr24 + 24; vDy = vDy - 1 }
+  if (vHr24 >= 24) { vHr24 = vHr24 - 24; vDy = vDy + 1 }
+  var vAmPm = IIF(vHr24 >= 12, "PM", "AM")
+  var vHr12 = IIF(vHr24 == 0, 12, IIF(vHr24 > 12, vHr24 - 12, vHr24))
+  var vMn = Mid(validStr, 10, 2)
+  validF = months[vMo - 1] + " " + Text(vDy) + ", " + vHr12 + ":" + vMn + " " + vAmPm + " " + tzLabel
+}
+
+var expireF = "—"
+if (Count(expireStr) >= 12) {
+  var eMo = Number(Mid(expireStr, 4, 2))
+  var eDy = Number(Mid(expireStr, 6, 2))
+  var eHr24 = Number(Mid(expireStr, 8, 2)) + utcOffset
+  if (eHr24 < 0) { eHr24 = eHr24 + 24; eDy = eDy - 1 }
+  if (eHr24 >= 24) { eHr24 = eHr24 - 24; eDy = eDy + 1 }
+  var eAmPm = IIF(eHr24 >= 12, "PM", "AM")
+  var eHr12 = IIF(eHr24 == 0, 12, IIF(eHr24 > 12, eHr24 - 12, eHr24))
+  var eMn = Mid(expireStr, 10, 2)
+  expireF = months[eMo - 1] + " " + Text(eDy) + ", " + eHr12 + ":" + eMn + " " + eAmPm + " " + tzLabel
+}
+
+var issueF = "—"
+if (Count(issueStr) >= 12) {
+  var iMo = Number(Mid(issueStr, 4, 2))
+  var iDy = Number(Mid(issueStr, 6, 2))
+  var iHr24 = Number(Mid(issueStr, 8, 2)) + utcOffset
+  if (iHr24 < 0) { iHr24 = iHr24 + 24; iDy = iDy - 1 }
+  if (iHr24 >= 24) { iHr24 = iHr24 - 24; iDy = iDy + 1 }
+  var iAmPm = IIF(iHr24 >= 12, "PM", "AM")
+  var iHr12 = IIF(iHr24 == 0, 12, IIF(iHr24 > 12, iHr24 - 12, iHr24))
+  var iMn = Mid(issueStr, 10, 2)
+  issueF = months[iMo - 1] + " " + Text(iDy) + ", " + iHr12 + ":" + iMn + " " + iAmPm + " " + tzLabel
+}
+
+// === RENDER ===
+return {
+  type: "text",
+  text:
+
+'<div style="font-family:Arial,Helvetica,sans-serif;max-width:320px;color:#1a1a1a;line-height:1.4;">' +
+
+// Header — colored with SPC fill, text auto-contrasts
+'<div style="background:' + fillColor + ';padding:12px 14px;margin:-8px -8px 0 -8px;border-radius:4px 4px 0 0;">' +
+  '<div style="font-size:10px;font-weight:700;color:' + headerSub + ';text-transform:uppercase;letter-spacing:1px;">SPC Day 1 ' + hazardName + ' Probability</div>' +
+  '<div style="font-size:22px;font-weight:700;color:' + headerTxt + ';letter-spacing:-0.3px;margin-top:2px;">' + hazardTag + ' — ' + label2 + '</div>' +
+'</div>' +
+
+// Forecast window
+'<div style="padding:12px 14px;border-bottom:1px solid #eee;">' +
+  '<table style="width:100%;border-collapse:collapse;">' +
+    '<tr>' +
+      '<td style="padding:6px 0;color:#999;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Valid</td>' +
+      '<td style="padding:6px 0;font-size:15px;font-weight:700;color:#1a1a1a;text-align:right;">' + validF + '</td>' +
+    '</tr>' +
+    '<tr style="border-top:1px solid #f0f0f0;">' +
+      '<td style="padding:6px 0;color:#999;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Expires</td>' +
+      '<td style="padding:6px 0;font-size:15px;font-weight:700;color:#1a1a1a;text-align:right;">' + expireF + '</td>' +
+    '</tr>' +
+  '</table>' +
+'</div>' +
+
+// Forecaster + issue time
+'<div style="padding:10px 14px;">' +
+  '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+    '<div>' +
+      '<div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Forecaster</div>' +
+      '<div style="font-size:12px;font-weight:600;color:#333;margin-top:1px;">' + forecaster + '</div>' +
+    '</div>' +
+    '<div style="text-align:right;">' +
+      '<div style="font-size:9px;color:#999;text-transform:uppercase;letter-spacing:0.5px;">Issued</div>' +
+      '<div style="font-size:12px;font-weight:600;color:#333;margin-top:1px;">' + issueF + '</div>' +
+    '</div>' +
+  '</div>' +
+'</div>' +
+
+'</div>'
+
+}
